@@ -1,0 +1,35 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "template-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8080", "--directory", ".claude/skills/build-website-earlydog/template"],
+      "port": 8080
+    },
+    {
+      "name": "generated-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8081", "--directory", ".tmp/test_bia_website_1"],
+      "port": 8081
+    },
+    {
+      "name": "bia-template-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8082", "--directory", ".claude/skills/build-website-bia/template"],
+      "port": 8082
+    },
+    {
+      "name": "liveblocks-template-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8083", "--directory", ".claude/skills/build-website-liveblocks/template"],
+      "port": 8083
+    },
+    {
+      "name": "liveblocks-test1-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8084", "--directory", ".tmp/test_liveblocks_website_1"],
+      "port": 8084
+    }
+  ]
+}

@@ -1,0 +1,990 @@
+/* ============================================
+   Dashboard — Website-Konfigurator
+   Gleiches Design System wie Landing Page
+   ============================================ */
+
+@font-face {
+    font-family: 'ClashDisplay';
+    src: url('fonts/ClashDisplay-Bold.woff2') format('woff2'),
+         url('fonts/ClashDisplay-Bold.woff') format('woff'),
+         url('fonts/ClashDisplay-Bold.ttf') format('truetype');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root {
+    --bg:       #0a0a0a;
+    --card:     #111111;
+    --card2:    #181818;
+    --green:    #a6ff00;
+    --white:    #ffffff;
+    --grey:     #555555;
+    --lgrey:    #888888;
+    --stroke:   #222222;
+    --red:      #ff4444;
+    --font:     'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --pill:     100px;
+    --ease:     cubic-bezier(0.25, 0.8, 0.25, 1);
+    --max-w:    720px;
+    --max-w-wide: 960px;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+    background: var(--bg);
+    color: var(--white);
+    font-family: var(--font);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    overscroll-behavior: none;
+}
+a { text-decoration: none; color: inherit; }
+
+/* ============================================
+   HEADER — fixed top bar with logo + progress
+   ============================================ */
+.db-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: rgba(10, 10, 10, 0.92);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-bottom: 0.5px solid var(--stroke);
+}
+.db-header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem 2rem;
+}
+.db-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.db-logo-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--green);
+    flex-shrink: 0;
+}
+.db-logo-name {
+    font-family: 'ClashDisplay', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+}
+
+/* Help link in header */
+.db-help-link {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--lgrey);
+    white-space: nowrap;
+    transition: color 0.2s;
+    flex-shrink: 0;
+}
+.db-help-link:hover { color: var(--green); }
+
+/* Progress indicator */
+.db-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.db-progress-steps {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.db-progress-step {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: pointer;
+    user-select: none;
+}
+.db-progress-step:hover .db-progress-num {
+    border-color: var(--lgrey);
+}
+.db-progress-step.done:hover .db-progress-num,
+.db-progress-step.active:hover .db-progress-num {
+    border-color: var(--green);
+}
+.db-progress-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1.5px solid var(--stroke);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--grey);
+    transition: all 0.35s var(--ease);
+    flex-shrink: 0;
+}
+.db-progress-step.active .db-progress-num {
+    border-color: var(--green);
+    color: var(--white);
+}
+.db-progress-step.done .db-progress-num {
+    background: var(--green);
+    border-color: var(--green);
+    color: #0a0a0a;
+}
+.db-progress-label {
+    font-size: 0.72rem;
+    color: var(--grey);
+    font-weight: 500;
+    white-space: nowrap;
+    transition: color 0.35s var(--ease);
+}
+.db-progress-step.active .db-progress-label { color: var(--white); }
+.db-progress-step.done .db-progress-label { color: var(--lgrey); }
+.db-progress-sep {
+    width: 20px;
+    height: 1px;
+    background: var(--stroke);
+    flex-shrink: 0;
+}
+
+/* ============================================
+   MAIN — step container
+   ============================================ */
+.db-main {
+    padding-top: 80px;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ============================================
+   STEP PANELS
+   ============================================ */
+.db-step {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    padding: 3rem 2rem 4rem;
+    min-height: calc(100vh - 80px);
+}
+.db-step.active {
+    display: flex;
+    animation: stepIn 0.5s var(--ease) forwards;
+}
+.db-step.exiting {
+    display: flex;
+    animation: stepOut 0.3s var(--ease) forwards;
+}
+@keyframes stepIn {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes stepOut {
+    from { opacity: 1; transform: translateY(0); }
+    to   { opacity: 0; transform: translateY(-16px); }
+}
+@keyframes stepInReverse {
+    from { opacity: 0; transform: translateY(-16px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================
+   STEP 1 — Lead ID Card
+   ============================================ */
+/* Step 1 should fit exactly in viewport without scrolling */
+#step-1 {
+    min-height: 0;
+    height: calc(100vh - 80px);
+    padding: 0 2rem;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.db-id-card {
+    background: var(--card);
+    border: 0.5px solid var(--stroke);
+    border-radius: 28px;
+    padding: 3.5rem 3rem;
+    width: 100%;
+    max-width: 480px;
+    text-align: center;
+}
+.db-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--green);
+    color: #0a0a0a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 0.8rem;
+    margin: 0 auto 1.5rem;
+}
+.db-heading {
+    font-size: clamp(1.8rem, 4vw, 2.5rem);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    margin-bottom: 0.75rem;
+}
+.db-subtext {
+    font-size: 0.95rem;
+    color: var(--lgrey);
+    line-height: 1.55;
+    margin-bottom: 2rem;
+}
+
+/* ============================================
+   INPUTS
+   ============================================ */
+.db-input-wrap {
+    position: relative;
+    margin-bottom: 1rem;
+}
+.db-input {
+    width: 100%;
+    padding: 0.9rem 1.5rem;
+    border-radius: var(--pill);
+    border: 0.5px solid var(--stroke);
+    background: #000;
+    color: var(--white);
+    font-size: 1rem;
+    font-family: var(--font);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.db-input::placeholder { color: var(--grey); }
+.db-input:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 2px rgba(166, 255, 0, 0.15);
+}
+.db-input.error {
+    border-color: var(--red);
+    animation: shake 0.3s ease;
+}
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25%      { transform: translateX(-6px); }
+    75%      { transform: translateX(6px); }
+}
+.db-error {
+    font-size: 0.8rem;
+    color: var(--red);
+    margin-top: 0.5rem;
+    display: none;
+}
+.db-error.visible { display: block; }
+
+/* Textarea */
+.db-textarea {
+    width: 100%;
+    padding: 0.9rem 1.25rem;
+    border-radius: 14px;
+    border: 0.5px solid var(--stroke);
+    background: #000;
+    color: var(--white);
+    font-size: 0.95rem;
+    font-family: var(--font);
+    outline: none;
+    resize: vertical;
+    min-height: 80px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.db-textarea::placeholder { color: var(--grey); }
+.db-textarea:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 2px rgba(166, 255, 0, 0.15);
+}
+
+/* Label */
+.db-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--lgrey);
+    margin-bottom: 0.5rem;
+}
+.db-input-group {
+    margin-bottom: 1.25rem;
+    text-align: left;
+}
+
+/* File upload */
+.db-file-upload {
+    display: block;
+    width: 100%;
+    padding: 1.5rem;
+    border-radius: 14px;
+    border: 1.5px dashed var(--stroke);
+    background: transparent;
+    color: var(--grey);
+    font-size: 0.85rem;
+    font-family: var(--font);
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 0.2s, color 0.2s;
+}
+.db-file-upload:hover {
+    border-color: var(--lgrey);
+    color: var(--lgrey);
+}
+.db-file-upload.has-file {
+    border-color: var(--green);
+    color: var(--green);
+    border-style: solid;
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+.db-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.85rem 2rem;
+    border-radius: var(--pill);
+    font-size: 0.95rem;
+    font-weight: 700;
+    font-family: var(--font);
+    cursor: pointer;
+    border: none;
+    transition: background 0.2s, opacity 0.2s, transform 0.15s;
+    white-space: nowrap;
+}
+.db-btn:active { transform: scale(0.97); }
+.db-btn-primary {
+    background: var(--green);
+    color: #0a0a0a;
+}
+.db-btn-primary:hover { background: #b8ff33; }
+.db-btn-primary:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    transform: none;
+}
+.db-btn-ghost {
+    background: transparent;
+    color: var(--lgrey);
+    border: 0.5px solid var(--stroke);
+}
+.db-btn-ghost:hover { border-color: var(--lgrey); color: var(--white); }
+.db-btn-skip {
+    background: transparent;
+    color: var(--lgrey);
+    border: none;
+    font-size: 0.85rem;
+    padding: 0.65rem 1.5rem;
+}
+.db-btn-skip:hover { color: var(--white); }
+
+/* Button row */
+.db-nav-btns {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 2.5rem;
+    width: 100%;
+    max-width: var(--max-w);
+}
+.db-btn-full { width: 100%; max-width: 320px; }
+
+/* Back link */
+.db-back-link {
+    display: inline-block;
+    margin-top: 1.5rem;
+    font-size: 0.85rem;
+    color: var(--grey);
+    transition: color 0.2s;
+}
+.db-back-link:hover { color: var(--white); }
+
+/* ============================================
+   STEP 2 — Template Cards (2x2 grid)
+   ============================================ */
+.db-step-wide { max-width: var(--max-w-wide); margin: 0 auto; width: 100%; }
+.db-template-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    width: 100%;
+    max-width: var(--max-w-wide);
+    margin-top: 2rem;
+}
+.db-tpl-card {
+    background: var(--card);
+    border: 0.5px solid var(--stroke);
+    border-radius: 20px;
+    padding: 1.25rem;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.db-tpl-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255,255,255,0.12);
+}
+.db-tpl-card.selected {
+    border-color: var(--green);
+    box-shadow: 0 0 0 2px rgba(166, 255, 0, 0.2);
+    transform: translateY(-2px);
+}
+.db-tpl-name {
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-top: 1rem;
+    margin-bottom: 0.2rem;
+}
+.db-tpl-desc {
+    font-size: 0.82rem;
+    color: var(--lgrey);
+    margin-bottom: 0.75rem;
+}
+.db-tpl-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+.db-tag {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 100px;
+    background: var(--card2);
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--lgrey);
+    white-space: nowrap;
+}
+
+/* Template preview — scaled iframe inside a centered wrapper */
+.db-preview-wrap {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 0.5px solid var(--stroke);
+    aspect-ratio: 16 / 10;
+    position: relative;
+    background: var(--card2);
+}
+.db-preview-scaler {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+}
+.db-preview-iframe {
+    width: 1440px;
+    height: 900px;
+    border: none;
+    transform-origin: 0 0;
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+/* ============================================
+   STEP 3 — Customization Form
+   ============================================ */
+.db-form-container {
+    width: 100%;
+    max-width: var(--max-w);
+}
+.db-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.9rem;
+    border-radius: 100px;
+    background: var(--card2);
+    border: 0.5px solid var(--stroke);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--lgrey);
+    margin-bottom: 1.5rem;
+}
+.db-badge-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+}
+.db-form-section {
+    margin-bottom: 2.5rem;
+}
+.db-form-section-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--lgrey);
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 0.5px solid var(--stroke);
+}
+.db-form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+.db-textarea {
+    resize: vertical;
+    min-height: 100px;
+    line-height: 1.6;
+    font-family: var(--font);
+}
+.db-field-hint {
+    font-size: 0.78rem;
+    color: var(--grey);
+    margin: -0.25rem 0 0.75rem;
+    line-height: 1.5;
+}
+
+/* ============================================
+   STEP 4 — Domain Cards
+   ============================================ */
+.db-domain-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+    max-width: var(--max-w);
+    margin-top: 2rem;
+}
+.db-domain-card {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    background: var(--card);
+    border: 0.5px solid var(--stroke);
+    border-radius: 20px;
+    padding: 1.25rem 1.75rem;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.db-domain-card:hover { border-color: rgba(255,255,255,0.12); }
+.db-domain-card.selected {
+    border-color: var(--green);
+    box-shadow: 0 0 0 2px rgba(166, 255, 0, 0.15);
+}
+.db-radio {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid var(--stroke);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.2s;
+}
+.db-domain-card.selected .db-radio { border-color: var(--green); }
+.db-radio-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--green);
+    transform: scale(0);
+    transition: transform 0.2s var(--ease);
+}
+.db-domain-card.selected .db-radio-dot { transform: scale(1); }
+.db-domain-info { flex: 1; }
+.db-domain-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.25rem;
+}
+.db-domain-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.db-tld-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 100px;
+    background: var(--card2);
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--lgrey);
+}
+.db-avail {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    color: var(--lgrey);
+}
+.db-avail-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--grey);
+}
+.db-avail-dot.available { background: var(--green); }
+/* domain price removed — included in package */
+
+/* ============================================
+   STEP 5 — Review
+   ============================================ */
+.db-review {
+    width: 100%;
+    max-width: var(--max-w);
+    margin: 0 auto;
+    padding-bottom: 2rem;
+}
+.db-review-section {
+    background: var(--card);
+    border: 0.5px solid var(--stroke);
+    border-radius: 20px;
+    padding: 1.75rem;
+    margin-bottom: 1rem;
+}
+.db-review-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--lgrey);
+    margin-bottom: 1rem;
+}
+.db-review-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 0.5rem 0;
+    border-bottom: 0.5px solid rgba(255,255,255,0.04);
+}
+.db-review-row:last-child { border-bottom: none; }
+.db-review-key {
+    font-size: 0.85rem;
+    color: var(--lgrey);
+    flex-shrink: 0;
+    min-width: 130px;
+}
+.db-review-val {
+    font-size: 0.9rem;
+    color: var(--white);
+    font-weight: 500;
+    text-align: right;
+}
+.db-review-domain {
+    display: inline-flex;
+    padding: 0.4rem 1rem;
+    border-radius: 100px;
+    background: rgba(166, 255, 0, 0.1);
+    border: 1px solid rgba(166, 255, 0, 0.3);
+    color: var(--green);
+    font-weight: 700;
+    font-size: 1rem;
+}
+.db-review-price {
+    text-align: center;
+    margin: 2rem 0 1.5rem;
+}
+.db-review-price-num {
+    font-size: clamp(3rem, 8vw, 5rem);
+    font-weight: 900;
+    letter-spacing: -0.05em;
+    line-height: 1;
+    color: var(--white);
+}
+.db-review-price-label {
+    font-size: 0.85rem;
+    color: var(--lgrey);
+    margin-top: 0.35rem;
+}
+
+/* Checkbox */
+.db-checkbox-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+    cursor: pointer;
+}
+.db-checkbox {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    border: 1.5px solid var(--stroke);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s, border-color 0.2s;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+}
+.db-checkbox:checked {
+    background: var(--green);
+    border-color: var(--green);
+}
+.db-checkbox:checked::after {
+    content: '';
+    width: 6px;
+    height: 10px;
+    border: solid #0a0a0a;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    margin-top: -2px;
+}
+.db-checkbox-label {
+    font-size: 0.85rem;
+    color: var(--lgrey);
+}
+.db-review-note {
+    font-size: 0.85rem;
+    color: var(--lgrey);
+    text-align: center;
+    margin-top: 1rem;
+    line-height: 1.6;
+}
+.db-review-note strong { color: var(--white); }
+
+/* Preview link button */
+.db-preview-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.85rem 2.5rem;
+    border-radius: var(--pill);
+    background: rgba(166, 255, 0, 0.08);
+    border: 1px solid rgba(166, 255, 0, 0.25);
+    color: var(--green);
+    font-weight: 700;
+    font-size: 1rem;
+    transition: background 0.2s, border-color 0.2s;
+    margin-top: 0.5rem;
+}
+.db-preview-link:hover {
+    background: rgba(166, 255, 0, 0.15);
+    border-color: var(--green);
+    cursor: pointer;
+}
+
+/* Preview overlay — fullscreen iframe with back button */
+.db-preview-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    background: var(--bg);
+    flex-direction: column;
+}
+.db-preview-overlay.visible { display: flex; }
+.db-preview-overlay-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.5rem;
+    background: rgba(10, 10, 10, 0.95);
+    border-bottom: 0.5px solid var(--stroke);
+    flex-shrink: 0;
+}
+.db-preview-overlay-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--white);
+}
+.db-preview-close {
+    font-size: 0.82rem;
+    padding: 0.5rem 1.25rem;
+}
+.db-preview-overlay-iframe {
+    flex: 1;
+    width: 100%;
+    border: none;
+}
+
+.db-preview-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--db-bg);
+    z-index: 10;
+    gap: 1.2rem;
+    transition: opacity 0.3s;
+}
+.db-preview-loading.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+.db-preview-loading p {
+    color: var(--db-text-secondary);
+    font-size: 1rem;
+}
+.db-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--db-border);
+    border-top-color: var(--db-accent);
+    border-radius: 50%;
+    animation: dbSpin 0.8s linear infinite;
+}
+@keyframes dbSpin {
+    to { transform: rotate(360deg); }
+}
+
+/* ============================================
+   GENERATING OVERLAY
+   ============================================ */
+.db-generating {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(10, 10, 10, 0.95);
+    backdrop-filter: blur(20px);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+}
+.db-generating.visible { display: flex; }
+.db-spinner {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 3px solid var(--stroke);
+    border-top-color: var(--green);
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+.db-generating-text {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--white);
+}
+
+/* ============================================
+   SUCCESS SCREEN
+   ============================================ */
+.db-success {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 80px);
+    text-align: center;
+    padding: 3rem 2rem;
+}
+.db-success.active { display: flex; }
+.db-success-check {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: var(--green);
+    color: #0a0a0a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    margin-bottom: 2rem;
+    animation: popIn 0.6s var(--ease);
+}
+@keyframes popIn {
+    0%   { transform: scale(0); opacity: 0; }
+    60%  { transform: scale(1.15); }
+    100% { transform: scale(1); opacity: 1; }
+}
+.db-success-heading {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    margin-bottom: 1rem;
+}
+.db-success-text {
+    font-size: 1rem;
+    color: var(--lgrey);
+    max-width: 420px;
+    margin-bottom: 2.5rem;
+    line-height: 1.6;
+}
+.db-success-contact {
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+    border-top: 0.5px solid var(--stroke);
+}
+.db-success-contact p {
+    font-size: 0.85rem;
+    color: var(--grey);
+    margin-bottom: 0.5rem;
+}
+.db-success-email {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--green);
+    transition: opacity 0.2s;
+}
+.db-success-email:hover { opacity: 0.8; }
+
+/* ============================================
+   RESPONSIVE — Tablet
+   ============================================ */
+@media (max-width: 900px) {
+    .db-template-grid { grid-template-columns: 1fr 1fr; }
+    .db-form-row { grid-template-columns: 1fr; }
+}
+
+/* ============================================
+   RESPONSIVE — Tablet (small)
+   ============================================ */
+@media (max-width: 768px) {
+    .db-header-inner { gap: 1rem; }
+    .db-progress-label { display: none; }
+    .db-progress-sep { width: 14px; }
+    .db-help-link { display: none; }
+}
+
+/* ============================================
+   RESPONSIVE — Mobile
+   ============================================ */
+@media (max-width: 600px) {
+    .db-header-inner { padding: 0.75rem 1rem; gap: 0.75rem; }
+    .db-progress-sep { width: 10px; }
+    .db-progress-num { width: 24px; height: 24px; font-size: 0.65rem; }
+
+    .db-step { padding: 2rem 1.25rem 3rem; }
+    .db-id-card { padding: 2.5rem 1.5rem; }
+
+    .db-template-grid { grid-template-columns: 1fr; max-width: 400px; margin-left: auto; margin-right: auto; }
+
+    .db-nav-btns { flex-direction: column; }
+    .db-nav-btns .db-btn { width: 100%; }
+
+    .db-domain-card { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+
+    .db-review-row { flex-direction: column; gap: 0.25rem; }
+    .db-review-val { text-align: left; }
+
+    .db-review-price-num { font-size: clamp(2.5rem, 12vw, 4rem); }
+}

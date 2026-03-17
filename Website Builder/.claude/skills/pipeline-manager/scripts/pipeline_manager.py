@@ -52,6 +52,7 @@ from generate_cold_email import (
     generate_day0_email,
     generate_day7_email,
     generate_day14_email,
+    get_screenshot_url,
 )
 
 # Call assistant
@@ -89,17 +90,20 @@ def _import_build_function(template_name: str):
 build_earlydog = _import_build_function("earlydog")
 build_bia = _import_build_function("bia")
 build_liveblocks = _import_build_function("liveblocks")
+build_loveseen = _import_build_function("loveseen")
 
 BUILD_FUNCTIONS = {
     "earlydog": build_earlydog,
     "bia": build_bia,
     "liveblocks": build_liveblocks,
+    "loveseen": build_loveseen,
 }
 
 TEMPLATE_LABELS = {
     "earlydog": "Klassisch",
     "bia": "Modern",
     "liveblocks": "Frisch",
+    "loveseen": "Elegant",
 }
 
 
@@ -137,9 +141,10 @@ COL = {
     "draft_url_1": 29,
     "draft_url_2": 30,
     "draft_url_3": 31,
-    "chosen_template": 32,
-    "next_action": 33,
-    "next_action_date": 34,
+    "draft_url_4": 32,
+    "chosen_template": 33,
+    "next_action": 34,
+    "next_action_date": 35,
 }
 
 COLUMN_NAMES = list(COL.keys())
@@ -247,13 +252,13 @@ def get_template_order(category: str) -> list[str]:
                      "web", "consulting", "medien"]
 
     if any(kw in cat for kw in trade_keywords):
-        return ["earlydog", "bia", "liveblocks"]
+        return ["earlydog", "bia", "liveblocks", "loveseen"]
     elif any(kw in cat for kw in pro_keywords):
-        return ["bia", "earlydog", "liveblocks"]
+        return ["bia", "earlydog", "liveblocks", "loveseen"]
     elif any(kw in cat for kw in tech_keywords):
-        return ["liveblocks", "bia", "earlydog"]
+        return ["liveblocks", "bia", "earlydog", "loveseen"]
     else:
-        return ["earlydog", "bia", "liveblocks"]
+        return ["earlydog", "bia", "liveblocks", "loveseen"]
 
 
 # --- Pipeline processing per status ---
@@ -317,9 +322,9 @@ def process_new(lead: dict, worksheet, sender_info: dict) -> list[dict]:
     # Step 3: Update sheet with draft URLs
     sheet_updates = {"status": "website_created"}
 
-    url_cols = ["draft_url_1", "draft_url_2", "draft_url_3"]
+    url_cols = ["draft_url_1", "draft_url_2", "draft_url_3", "draft_url_4"]
     for i, template_name in enumerate(template_order):
-        if template_name in draft_urls and i < 3:
+        if template_name in draft_urls and i < 4:
             sheet_updates[url_cols[i]] = draft_urls[template_name]
 
     # Step 4: Generate outreach
@@ -331,15 +336,22 @@ def process_new(lead: dict, worksheet, sender_info: dict) -> list[dict]:
     url1 = url_list[0] if len(url_list) > 0 else ""
     url2 = url_list[1] if len(url_list) > 1 else ""
     url3 = url_list[2] if len(url_list) > 2 else ""
+    url4 = url_list[3] if len(url_list) > 3 else ""
+    if not url4:
+        url4 = url3 or url2 or url1
 
     if owner_email:
         # Generate cold email
+        ss1 = get_screenshot_url(url1)
+        ss2 = get_screenshot_url(url2)
+        ss3 = get_screenshot_url(url3)
+        ss4 = get_screenshot_url(url4)
         email = generate_day0_email(
             business_name=biz,
-            category=category,
-            city=city,
             owner_name=owner_name,
-            url1=url1, url2=url2, url3=url3,
+            url1=url1, url2=url2, url3=url3, url4=url4,
+            ss1=ss1, ss2=ss2, ss3=ss3, ss4=ss4,
+            lead_id=lead_id,
             sender_name=sender_info["name"],
             sender_phone=sender_info["phone"],
             sender_email=sender_info["email"],
@@ -413,8 +425,11 @@ def process_website_created(lead: dict, worksheet, sender_info: dict) -> list[di
     url1 = lead.get("draft_url_1", "")
     url2 = lead.get("draft_url_2", "")
     url3 = lead.get("draft_url_3", "")
+    url4 = lead.get("draft_url_4", "")
+    if not url4:
+        url4 = url3 or url2 or url1
 
-    if not any([url1, url2, url3]):
+    if not any([url1, url2, url3, url4]):
         actions.append({
             "type": "WARNING",
             "priority": "MEDIUM",
@@ -428,10 +443,16 @@ def process_website_created(lead: dict, worksheet, sender_info: dict) -> list[di
     sheet_updates = {}
 
     if owner_email:
+        ss1 = get_screenshot_url(url1)
+        ss2 = get_screenshot_url(url2)
+        ss3 = get_screenshot_url(url3)
+        ss4 = get_screenshot_url(url4)
         email = generate_day0_email(
-            business_name=biz, category=category, city=city,
+            business_name=biz,
             owner_name=owner_name,
-            url1=url1, url2=url2, url3=url3,
+            url1=url1, url2=url2, url3=url3, url4=url4,
+            ss1=ss1, ss2=ss2, ss3=ss3, ss4=ss4,
+            lead_id=lead_id,
             sender_name=sender_info["name"],
             sender_phone=sender_info["phone"],
             sender_email=sender_info["email"],
@@ -523,14 +544,18 @@ def process_email_sent(lead: dict, worksheet, sender_info: dict) -> list[dict]:
     url1 = lead.get("draft_url_1", "")
     url2 = lead.get("draft_url_2", "")
     url3 = lead.get("draft_url_3", "")
+    url4 = lead.get("draft_url_4", "")
+    if not url4:
+        url4 = url3 or url2 or url1
 
     sheet_updates = {}
 
     if days_since >= 14:
         # Day 14: Breakup email
         email = generate_day14_email(
-            business_name=biz, category=category, city=city,
-            owner_name=owner_name, url1=url1,
+            business_name=biz,
+            owner_name=owner_name,
+            lead_id=lead_id,
             sender_name=sender_info["name"],
             sender_phone=sender_info["phone"],
             sender_email=sender_info["email"],
@@ -553,9 +578,11 @@ def process_email_sent(lead: dict, worksheet, sender_info: dict) -> list[dict]:
     elif days_since >= 7:
         # Day 7: Follow-up email
         email = generate_day7_email(
-            business_name=biz, category=category, city=city,
+            business_name=biz,
+            category=category,
             owner_name=owner_name,
-            url1=url1, url2=url2, url3=url3,
+            url1=url1, url2=url2, url3=url3, url4=url4,
+            lead_id=lead_id,
             sender_name=sender_info["name"],
             sender_phone=sender_info["phone"],
             sender_email=sender_info["email"],

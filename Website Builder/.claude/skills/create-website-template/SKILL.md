@@ -237,3 +237,4 @@ Before a template skill is complete, verify:
 | 1 — EarlyDog | `build-website-earlydog` | Playful Bauhaus | Local trades | 8080 |
 | 2 — BiA | `build-website-bia` | Editorial serif | Professional services | 8082 |
 | 3 — Liveblocks | `build-website-liveblocks` | Modern dark/light SaaS | Tech, startups, IT services | 8083 |
+| 4 — LoveSeen | `build-website-loveseen` | Luxury editorial beauty | Salons, photographers, wellness, personal brands | 8085 |

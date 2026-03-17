@@ -30,6 +30,30 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8084", "--directory", ".tmp/test_liveblocks_website_1"],
       "port": 8084
+    },
+    {
+      "name": "loveseen-template-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8085", "--directory", ".claude/skills/build-website-loveseen/template"],
+      "port": 8085
+    },
+    {
+      "name": "loveseen-test1-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8086", "--directory", ".tmp/test_loveseen_website_1"],
+      "port": 8086
+    },
+    {
+      "name": "loveseen-review-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8087", "--directory", ".tmp/review_example_website"],
+      "port": 8087
+    },
+    {
+      "name": "landing-page",
+      "runtimeExecutable": ".venv/bin/python3",
+      "runtimeArgs": ["server.py"],
+      "port": 8090
     }
   ]
 }

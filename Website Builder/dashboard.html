@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>meine-kmu &mdash; Dein Website-Konfigurator</title>
+    <meta name="description" content="Konfiguriere deine professionelle Website in wenigen Schritten.">
+    <link rel="stylesheet" href="dashboard.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="db-header">
+    <div class="db-header-inner">
+        <a href="index.html" class="db-logo">
+            <span class="db-logo-name">meine-kmu<span style="color:var(--green);">.</span></span>
+        </a>
+        <a href="mailto:info@meine-kmu.ch" class="db-help-link">Hilfe &amp; Kontakt</a>
+        <div class="db-progress">
+            <div class="db-progress-steps">
+                <div class="db-progress-step active" id="pstep-1" onclick="dbNavStep(1)" role="button" tabindex="0">
+                    <div class="db-progress-num">1</div>
+                    <span class="db-progress-label">Code</span>
+                </div>
+                <div class="db-progress-sep"></div>
+                <div class="db-progress-step" id="pstep-2" onclick="dbNavStep(2)" role="button" tabindex="0">
+                    <div class="db-progress-num">2</div>
+                    <span class="db-progress-label">Design</span>
+                </div>
+                <div class="db-progress-sep"></div>
+                <div class="db-progress-step" id="pstep-3" onclick="dbNavStep(3)" role="button" tabindex="0">
+                    <div class="db-progress-num">3</div>
+                    <span class="db-progress-label">Anpassen</span>
+                </div>
+                <div class="db-progress-sep"></div>
+                <div class="db-progress-step" id="pstep-4" onclick="dbNavStep(4)" role="button" tabindex="0">
+                    <div class="db-progress-num">4</div>
+                    <span class="db-progress-label">Adresse</span>
+                </div>
+                <div class="db-progress-sep"></div>
+                <div class="db-progress-step" id="pstep-5" onclick="dbNavStep(5)" role="button" tabindex="0">
+                    <div class="db-progress-num">5</div>
+                    <span class="db-progress-label">Bestellen</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main class="db-main">
+
+    <!-- STEP 1: Code Entry -->
+    <div class="db-step active" id="step-1">
+        <div class="db-id-card">
+            <h1 class="db-heading">Willkommen</h1>
+            <p class="db-subtext">Gib deinen Code ein, den du per E-Mail erhalten hast.</p>
+            <form id="leadForm" autocomplete="off">
+                <div class="db-input-wrap">
+                    <input class="db-input" type="text" id="leadIdInput" placeholder="z.B. a1b2c3d4e5f6" required>
+                    <div class="db-error" id="leadIdError"></div>
+                </div>
+                <button class="db-btn db-btn-primary db-btn-full" type="submit" style="margin-top:0.75rem;">Weiter &rarr;</button>
+            </form>
+            <a href="index.html" class="db-back-link">&larr; Zur&uuml;ck zur Startseite</a>
+        </div>
+    </div>
+
+    <!-- STEP 2: Template Selection -->
+    <!-- In production: iframe src replaced with pre-built hosted URLs from Google Sheet via Lead ID -->
+    <div class="db-step" id="step-2">
+        <div class="db-step-wide" style="text-align:center;">
+            <h1 class="db-heading">W&auml;hle dein Design</h1>
+            <p class="db-subtext">Wir haben 4 Webseiten f&uuml;r dein Business erstellt. W&auml;hle dein Lieblingsdesign.</p>
+            <div class="db-template-grid">
+                <!-- EarlyDog -->
+                <div class="db-tpl-card" data-tpl="earlydog" tabindex="0">
+                    <div class="db-preview-wrap">
+                        <div class="db-preview-scaler">
+                            <iframe class="db-preview-iframe" src=".claude/skills/build-website-earlydog/template/index.html" loading="lazy"></iframe>
+                        </div>
+                    </div>
+                    <div class="db-tpl-name">EarlyDog</div>
+                    <div class="db-tpl-desc">Verspielt &amp; modern</div>
+                    <div class="db-tpl-tags"><span class="db-tag">Handwerker</span><span class="db-tag">Coiffeure</span><span class="db-tag">Reinigungen</span></div>
+                </div>
+                <!-- BiA -->
+                <div class="db-tpl-card" data-tpl="bia" tabindex="0">
+                    <div class="db-preview-wrap">
+                        <div class="db-preview-scaler">
+                            <iframe class="db-preview-iframe" src=".claude/skills/build-website-bia/template/index.html" loading="lazy"></iframe>
+                        </div>
+                    </div>
+                    <div class="db-tpl-name">BiA</div>
+                    <div class="db-tpl-desc">Premium &amp; editorial</div>
+                    <div class="db-tpl-tags"><span class="db-tag">Agenturen</span><span class="db-tag">Architekten</span><span class="db-tag">Berater</span></div>
+                </div>
+                <!-- Liveblocks -->
+                <div class="db-tpl-card" data-tpl="liveblocks" tabindex="0">
+                    <div class="db-preview-wrap">
+                        <div class="db-preview-scaler">
+                            <iframe class="db-preview-iframe" src=".claude/skills/build-website-liveblocks/template/index.html" loading="lazy"></iframe>
+                        </div>
+                    </div>
+                    <div class="db-tpl-name">Liveblocks</div>
+                    <div class="db-tpl-desc">Modern &amp; technisch</div>
+                    <div class="db-tpl-tags"><span class="db-tag">IT-Firmen</span><span class="db-tag">Startups</span><span class="db-tag">Tech</span></div>
+                </div>
+                <!-- LoveSeen -->
+                <div class="db-tpl-card" data-tpl="loveseen" tabindex="0">
+                    <div class="db-preview-wrap">
+                        <div class="db-preview-scaler">
+                            <iframe class="db-preview-iframe" src=".claude/skills/build-website-loveseen/template/index.html" loading="lazy"></iframe>
+                        </div>
+                    </div>
+                    <div class="db-tpl-name">LoveSeen</div>
+                    <div class="db-tpl-desc">Luxuri&ouml;s &amp; editorial</div>
+                    <div class="db-tpl-tags"><span class="db-tag">Beauty</span><span class="db-tag">Wellness</span><span class="db-tag">Fotografen</span></div>
+                </div>
+            </div>
+            <div class="db-nav-btns">
+                <button class="db-btn db-btn-ghost" onclick="dbGoBack(1)">&larr; Zur&uuml;ck</button>
+                <button class="db-btn db-btn-primary" id="step2NextBtn" onclick="dbStep2Next()" disabled>Weiter &rarr;</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 3: Customization -->
+    <div class="db-step" id="step-3">
+        <div class="db-form-container" style="text-align:center;">
+            <h1 class="db-heading">Erz&auml;hl uns mehr</h1>
+            <p class="db-subtext">Um eine bessere, genauere und pers&ouml;nlichere Website f&uuml;r Sie zu gestalten, w&uuml;rden wir gerne etwas mehr &uuml;ber Ihr Unternehmen erfahren.</p>
+            <div class="db-badge" style="margin:0 auto 1.5rem;"><span class="db-badge-dot"></span><span id="templateBadge">Template</span></div>
+            <div id="customFormBody" style="text-align:left;"></div>
+            <div class="db-nav-btns">
+                <button class="db-btn db-btn-ghost" onclick="dbGoBack(2)">&larr; Zur&uuml;ck</button>
+                <button class="db-btn db-btn-primary" onclick="dbStep3Next()">Weiter &rarr;</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 4: Web Address Selection -->
+    <div class="db-step" id="step-4">
+        <div style="text-align:center;width:100%;">
+            <h1 class="db-heading">Deine Web-Adresse</h1>
+            <p class="db-subtext">W&auml;hle, wie deine Website im Internet erreichbar sein wird. Das ist der Name, den deine Kunden in den Browser eingeben.</p>
+            <div class="db-domain-list" id="domainList" style="margin:2rem auto 0;"></div>
+            <div class="db-nav-btns">
+                <button class="db-btn db-btn-ghost" onclick="dbGoBack(3)">&larr; Zur&uuml;ck</button>
+                <button class="db-btn db-btn-primary" id="step4NextBtn" onclick="dbStep4Next()" disabled>Weiter &rarr;</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 5: Review & Order -->
+    <div class="db-step" id="step-5">
+        <div class="db-review" style="text-align:center;">
+            <h1 class="db-heading">Fast geschafft!</h1>
+            <p class="db-subtext">Schau dir deine fertige Website an und best&auml;tige deine Bestellung.</p>
+
+            <!-- Preview button opens overlay -->
+            <div class="db-review-section" style="text-align:center;">
+                <div class="db-review-title">Deine Website-Vorschau</div>
+                <button class="db-preview-link" id="reviewPreviewBtn" onclick="dbOpenPreview()">Website ansehen &rarr;</button>
+            </div>
+
+            <div class="db-review-section" style="text-align:left;">
+                <div class="db-review-title">Deine Web-Adresse</div>
+                <div class="db-review-domain" id="reviewDomain"></div>
+            </div>
+
+            <div class="db-review-price">
+                <div class="db-review-price-num">CHF 39.-</div>
+                <div class="db-review-price-label">pro Monat</div>
+            </div>
+
+            <p class="db-review-note" style="margin-bottom:1.5rem;">Deine Website wird innerhalb von <strong>48 Stunden</strong> live geschaltet.</p>
+
+            <label class="db-checkbox-wrap" style="justify-content:center;">
+                <input class="db-checkbox" type="checkbox" id="agbCheck">
+                <span class="db-checkbox-label">Ich akzeptiere die AGB</span>
+            </label>
+            <button class="db-btn db-btn-primary db-btn-full" id="orderBtn" disabled style="margin:0 auto;">Website jetzt bestellen &rarr;</button>
+
+            <div style="margin-top:1.5rem;"><button class="db-btn db-btn-ghost" onclick="dbGoBack(4)">&larr; Zur&uuml;ck</button></div>
+        </div>
+    </div>
+
+</main>
+
+<!-- GENERATING OVERLAY -->
+<div class="db-generating" id="generating">
+    <div class="db-spinner"></div>
+    <div class="db-generating-text">Deine Website wird generiert&hellip;</div>
+</div>
+
+<!-- SUCCESS SCREEN -->
+<div class="db-success" id="success">
+    <div class="db-success-check">&#10003;</div>
+    <h1 class="db-success-heading">Vielen Dank!</h1>
+    <p class="db-success-text">Deine Website wird innerhalb von 48 Stunden live geschaltet. Du erh&auml;ltst eine Best&auml;tigung per E-Mail.</p>
+    <button class="db-btn db-btn-primary" onclick="dbGoHome()">Zur&uuml;ck zur Startseite</button>
+    <div class="db-success-contact">
+        <p>Fragen? Kontaktiere uns jederzeit:</p>
+        <a href="mailto:info@meine-kmu.ch" class="db-success-email">info@meine-kmu.ch</a>
+    </div>
+</div>
+
+<!-- PREVIEW OVERLAY -->
+<div class="db-preview-overlay" id="previewOverlay">
+    <div class="db-preview-overlay-header">
+        <span class="db-preview-overlay-title">Website-Vorschau</span>
+        <button class="db-btn db-btn-ghost db-preview-close" onclick="dbClosePreview()">&larr; Zur&uuml;ck zur Bestellung</button>
+    </div>
+    <div class="db-preview-loading" id="previewLoading">
+        <div class="db-spinner"></div>
+        <p>Website wird erstellt&hellip;</p>
+    </div>
+    <iframe class="db-preview-overlay-iframe" id="previewOverlayIframe" src="about:blank"></iframe>
+</div>
+
+<script src="dashboard.js"></script>
+</body>
+</html>

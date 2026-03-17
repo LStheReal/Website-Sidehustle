@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="hBg" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#2C1B14"/>
+      <stop offset="40%" stop-color="#3E2820"/>
+      <stop offset="100%" stop-color="#1C100A"/>
+    </linearGradient>
+    <radialGradient id="hGlow1" cx="0.3" cy="0.4" r="0.45">
+      <stop offset="0%" stop-color="#8B6848" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+    <radialGradient id="hGlow2" cx="0.7" cy="0.6" r="0.35">
+      <stop offset="0%" stop-color="#6B4830" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+    <radialGradient id="hVig" cx="0.5" cy="0.5" r="0.75">
+      <stop offset="0%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.6"/>
+    </radialGradient>
+    <filter id="hBlur1"><feGaussianBlur stdDeviation="60"/></filter>
+    <filter id="hBlur2"><feGaussianBlur stdDeviation="30"/></filter>
+    <filter id="hBlur3"><feGaussianBlur stdDeviation="15"/></filter>
+    <filter id="hGrain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feBlend in="SourceGraphic" mode="multiply"/>
+    </filter>
+  </defs>
+
+  <!-- Deep warm base -->
+  <rect width="1440" height="900" fill="url(#hBg)"/>
+
+  <!-- Large organic warm shapes — abstract light play -->
+  <ellipse cx="450" cy="380" rx="400" ry="350" fill="#7A5438" opacity="0.35" filter="url(#hBlur1)"/>
+  <ellipse cx="900" cy="500" rx="350" ry="300" fill="#5A3C28" opacity="0.3" filter="url(#hBlur1)"/>
+  <ellipse cx="350" cy="300" rx="250" ry="200" fill="#A07050" opacity="0.2" filter="url(#hBlur2)"/>
+  <ellipse cx="700" cy="400" rx="200" ry="280" fill="#8B6040" opacity="0.15" filter="url(#hBlur2)"/>
+
+  <!-- Subtle warm highlights — like studio lighting -->
+  <rect width="1440" height="900" fill="url(#hGlow1)"/>
+  <rect width="1440" height="900" fill="url(#hGlow2)"/>
+
+  <!-- Flowing silk-like curves -->
+  <path d="M-100,600 Q200,400 500,500 Q800,600 1100,350 Q1300,250 1540,400" stroke="#A0785A" stroke-width="120" fill="none" opacity="0.08" filter="url(#hBlur2)" stroke-linecap="round"/>
+  <path d="M-100,700 Q300,500 600,600 Q900,700 1200,450 Q1400,350 1540,500" stroke="#8B6848" stroke-width="80" fill="none" opacity="0.06" filter="url(#hBlur3)" stroke-linecap="round"/>
+
+  <!-- Delicate gold-leaf accents -->
+  <circle cx="380" cy="320" r="120" fill="#C4956A" opacity="0.06" filter="url(#hBlur3)"/>
+  <circle cx="980" cy="280" r="80" fill="#B8886A" opacity="0.05" filter="url(#hBlur3)"/>
+  <circle cx="1200" cy="600" r="60" fill="#C8A078" opacity="0.04" filter="url(#hBlur3)"/>
+
+  <!-- Thin decorative lines — like hair strands or fabric folds -->
+  <path d="M200,0 Q250,200 220,450 Q200,600 250,900" stroke="#8B6848" stroke-width="1" fill="none" opacity="0.1"/>
+  <path d="M220,0 Q270,180 250,420 Q230,580 270,900" stroke="#8B6848" stroke-width="0.8" fill="none" opacity="0.08"/>
+  <path d="M1100,0 Q1080,250 1120,500 Q1140,700 1100,900" stroke="#7A5838" stroke-width="1" fill="none" opacity="0.08"/>
+
+  <!-- Film grain -->
+  <rect width="1440" height="900" filter="url(#hGrain)" opacity="0.03"/>
+
+  <!-- Vignette -->
+  <rect width="1440" height="900" fill="url(#hVig)"/>
+</svg>

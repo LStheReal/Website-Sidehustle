@@ -47,6 +47,8 @@ Automated pipeline that finds businesses without websites, builds websites for t
 - `build-website-bia` — Professional editorial template (serif, split-screen, gold accents)
 - `build-website-liveblocks` — Modern dark/light template (SaaS-style, gradients)
 - `build-website-earlydog` — Playful startup template (Bauhaus, energetic)
+- `build-website-loveseen` — Luxury editorial template (beauty, wellness, serif)
+- `adapt-website` — **Build Final**: Takes a chosen template + customer input (description, values, logo, images) and rewrites ALL text with AI. Intelligent image placement. Used after customer orders via dashboard (Pipeline Step 7).
 - `create-website-template` — Meta-skill: create new templates from reference sites
 
 ### Domain & Deployment

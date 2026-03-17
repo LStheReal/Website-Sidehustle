@@ -1,0 +1,14 @@
+# Virtual environment
+.venv/
+__pycache__/
+
+# Environment variables (keep .env.example)
+Website Builder/.env
+
+# Temp files
+.tmp/
+*.pyc
+.DS_Store
+
+# Wrangler
+.wrangler/

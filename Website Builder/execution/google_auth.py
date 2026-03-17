@@ -30,9 +30,10 @@ def get_credentials(scopes: list[str] = None):
     Get valid Google OAuth2 credentials.
 
     Tries in order:
-    1. Load existing token from token.json and refresh if expired
-    2. Load service account from GOOGLE_APPLICATION_CREDENTIALS env var
-    3. Run OAuth installed app flow (opens browser for login)
+    1. Load token from GOOGLE_TOKEN_JSON env var (for Railway/cloud deployment)
+    2. Load existing token from token.json and refresh if expired
+    3. Load service account from GOOGLE_APPLICATION_CREDENTIALS env var
+    4. Run OAuth installed app flow (opens browser for login)
 
     Args:
         scopes: OAuth scopes. Defaults to Sheets + Drive.
@@ -47,6 +48,9 @@ def get_credentials(scopes: list[str] = None):
         scopes = DEFAULT_SCOPES
 
     creds = None
+
+    # 0. Write credential files from env vars if they exist (Railway deployment)
+    _write_credentials_from_env()
 
     # 1. Try existing OAuth 2.0 token
     if os.path.exists("token.json"):
@@ -105,3 +109,23 @@ def get_credentials(scopes: list[str] = None):
             sys.exit(1)
 
     return creds
+
+
+def _write_credentials_from_env():
+    """Write Google credential files from environment variables (for cloud deployment).
+
+    If GOOGLE_CREDENTIALS_JSON is set, writes it to credentials.json.
+    If GOOGLE_TOKEN_JSON is set, writes it to token.json.
+    """
+    creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON", "")
+    token_json = os.getenv("GOOGLE_TOKEN_JSON", "")
+
+    if creds_json and not os.path.exists("credentials.json"):
+        with open("credentials.json", "w") as f:
+            f.write(creds_json)
+        print("Wrote credentials.json from GOOGLE_CREDENTIALS_JSON env var")
+
+    if token_json and not os.path.exists("token.json"):
+        with open("token.json", "w") as f:
+            f.write(token_json)
+        print("Wrote token.json from GOOGLE_TOKEN_JSON env var")

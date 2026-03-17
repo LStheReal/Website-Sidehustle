@@ -69,10 +69,11 @@ LEAD_COLUMNS = [
     "email_sent_date",
     "response_date",
     "notes",
-    # Pipeline Tracking (cols 29-34)
+    # Pipeline Tracking (cols 29-35)
     "draft_url_1",
     "draft_url_2",
     "draft_url_3",
+    "draft_url_4",
     "chosen_template",
     "next_action",
     "next_action_date",
@@ -83,7 +84,7 @@ METADATA_COLS = (1, 3)       # A-C: light grey
 BUSINESS_COLS = (4, 13)      # D-M: light blue
 CONTACT_COLS = (14, 20)      # N-T: light green
 STATUS_COLS = (21, 28)       # U-AB: light yellow
-TRACKING_COLS = (29, 34)     # AC-AH: light purple
+TRACKING_COLS = (29, 35)     # AC-AI: light purple
 
 # Status dropdown values
 STATUS_VALUES = [

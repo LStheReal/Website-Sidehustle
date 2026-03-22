@@ -78,7 +78,7 @@ var _mkModalContent = {
     +'<p style="font-size:.88rem;color:#888;line-height:1.65;margin:0 0 .5rem;">Diese Allgemeinen Gesch\u00e4ftsbedingungen (nachfolgend \u00abAGB\u00bb) regeln das Vertragsverh\u00e4ltnis zwischen meine-kmu.ch (nachfolgend \u00abAnbieter\u00bb), betrieben von Sch\u00fcl\u00e9 Beratung, Schweiz, und der nat\u00fcrlichen oder juristischen Person (nachfolgend \u00abKunde\u00bb), die sich \u00fcber das Onboarding-Formular f\u00fcr die Dienstleistungen des Anbieters registriert oder diese nutzt.</p>'
     +'<p style="font-size:.88rem;color:#888;line-height:1.65;margin:0 0 .5rem;">Mit dem Abschluss des Onboarding-Prozesses best\u00e4tigt der Kunde, diese AGB gelesen, verstanden und akzeptiert zu haben.</p>'
     +'<h3 style="font-size:1rem;font-weight:700;color:#fff;margin:1.5rem 0 .5rem;">\u00a7 2 \u00a0Leistungsumfang</h3>'
-    +'<p style="font-size:.88rem;color:#888;line-height:1.65;margin:0 0 .5rem;">Der Anbieter erbringt: Planung, Gestaltung und Umsetzung einer Website; Kauf und Hosting der Website; Einrichtung von Inhaltsbereichen; Technische Betreuung und Support; Optionale Zusatzleistungen nach Vereinbarung.</p>'
+    +'<p style="font-size:.88rem;color:#888;line-height:1.65;margin:0 0 .5rem;">Der Anbieter erbringt: Planung, Gestaltung und Umsetzung einer Website; Kauf der Domain; Hosting der Website; Einrichtung von Inhaltsbereichen; Technische Betreuung und Support; Optionale Zusatzleistungen nach Vereinbarung.</p>'
     +'<h3 style="font-size:1rem;font-weight:700;color:#fff;margin:1.5rem 0 .5rem;">\u00a7 3 \u00a0Mitwirkungspflichten des Kunden</h3>'
     +'<p style="font-size:.88rem;color:#888;line-height:1.65;margin:0 0 .5rem;">Der Kunde stellt alle erforderlichen Inhalte rechtzeitig bereit, liefert korrekte Angaben.</p>'
     +'<h3 style="font-size:1rem;font-weight:700;color:#fff;margin:1.5rem 0 .5rem;">\u00a7 4 \u00a0Preise und Zahlungsbedingungen</h3>'
@@ -95,7 +95,7 @@ var _mkModalContent = {
     +'<p style="font-size:.88rem;color:#888;line-height:1.65;margin:0 0 .5rem;">Eine K\u00fcndigung ist jederzeit m\u00f6glich und wird auf das Ende der laufenden Abrechnungsperiode wirksam \u2014 es erfolgt keine weitere Abbuchung. Bereits bezahlte Betr\u00e4ge werden nicht zur\u00fcckerstattet. Die Website bleibt bis zum Ende der bezahlten Periode online.</p>'
     +'<h3 style="font-size:1rem;font-weight:700;color:#fff;margin:1.5rem 0 .5rem;">\u00a7 10\u201312 \u00a0Schlussbestimmungen</h3>'
     +'<p style="font-size:.88rem;color:#888;line-height:1.65;margin:0 0 .5rem;">Schweizerisches Recht. Gerichtsstand: Wohnsitz des Anbieters. Salvatorische Klausel gilt.</p>'
-    +'<p style="margin-top:2rem;color:#666;font-size:.82rem;">Kontakt: meine-kmu.ch | Sch\u00fcl\u00e9 Beratung | Schweiz | info@meine-kmu.ch</p>';
+    +'<p style="margin-top:2rem;color:#666;font-size:.82rem;">Kontakt: meine-kmu.ch | info@meine-kmu.ch</p>';
   },
   kontaktModal: function() {
     return '<div style="text-align:center;">'
@@ -111,7 +111,25 @@ var _mkModalContent = {
     +'<p style="font-size:.95rem;color:#888;margin:0 0 .3rem;">Louise Schul\u00e9 &amp; Mael Dubach</p>'
     +'<p style="font-size:.95rem;color:#888;margin:0 0 1rem;">Z\u00fcrich, Schweiz</p>'
     +'<p style="font-size:.95rem;color:#888;margin:0 0 .3rem;">E-Mail: <a href="mailto:info@meine-kmu.ch" style="color:#a6ff00;text-decoration:none;">info@meine-kmu.ch</a></p>'
-    +'<p style="margin-top:1.5rem;color:#666;font-size:.85rem;">Unterst\u00fctzt von Schul\u00e9 Beratung GmbH</p>';
+    +'<p style="margin-top:1.5rem;color:#888;font-size:.9rem;">Ein Projekt von Sch\u00fcl\u00e9 Beratung GmbH \u2014 betrieben, gebaut und Idee von Louise Sch\u00fcl\u00e9 und Mael Dubach.</p>';
+  },
+  faqModal: function() {
+    var qs = [
+      ['Was kostet eine Website bei meine-kmu?', 'Unsere Websites kosten CHF 39.- pro Monat. Darin enthalten sind Design, Hosting, Wartung und Support \u2014 alles inklusive, keine versteckten Kosten.'],
+      ['Wie lange dauert es, bis meine Website online ist?', 'Deine Website ist innerhalb von 48 Stunden nach Bestellung live. Bei uns musst du nicht wochenlang warten.'],
+      ['Kann ich meine Website sp\u00e4ter anpassen?', 'Ja, du kannst jederzeit \u00c4nderungen an Texten, Bildern und Inhalten anfragen. Schreib uns einfach eine E-Mail an info@meine-kmu.ch.'],
+      ['Brauche ich technische Kenntnisse?', 'Nein, gar nicht. Du sagst uns was du brauchst und wir k\u00fcmmern uns um alles Technische. Du musst nichts installieren oder programmieren.'],
+      ['Kann ich mein Abo jederzeit k\u00fcndigen?', 'Ja, du kannst dein Abo jederzeit zum Monatsende k\u00fcndigen. Es gibt keine Mindestlaufzeit.'],
+      ['Bekomme ich eine eigene Domain (z.B. meinefirma.ch)?', 'Ja, wir helfen dir eine passende .ch oder .com Domain zu finden und richten alles f\u00fcr dich ein.']
+    ];
+    var html = '<h2 style="font-size:1.5rem;font-weight:800;letter-spacing:-0.03em;color:#fff;margin:0 0 1.5rem;">H\u00e4ufig gestellte Fragen</h2>';
+    for (var i = 0; i < qs.length; i++) {
+      html += '<div style="border-top:1px solid #222;padding:1rem 0;">'
+        + '<div style="font-size:1rem;font-weight:600;color:#fff;margin-bottom:.5rem;">' + qs[i][0] + '</div>'
+        + '<p style="font-size:.9rem;color:#888;line-height:1.65;margin:0;">' + qs[i][1] + '</p>'
+        + '</div>';
+    }
+    return html;
   }
 };
 
@@ -483,70 +501,6 @@ document.addEventListener('keydown', function(e) {
 </div>
 </div>
 
-<!-- FAQ SECTION -->
-<div class="mk-faq-section" id="faq">
-  <div class="mk-faq-inner">
-    <div class="mk-faq-eyebrow">FAQ</div>
-    <div class="mk-faq-headline">H&auml;ufig gestellte Fragen</div>
-    <div class="mk-faq-list">
-      <div class="mk-faq-item">
-        <button class="mk-faq-question" onclick="toggleFaq(this)">
-          <span>Was kostet eine Website bei meine-kmu?</span>
-          <span class="mk-faq-icon">+</span>
-        </button>
-        <div class="mk-faq-answer">
-          <p>Unsere Websites kosten CHF 39.- pro Monat oder CHF 390.- pro Jahr &mdash; das entspricht 2 Monate gratis. Darin enthalten sind Design, Hosting, Wartung und Support &mdash; alles inklusive, keine versteckten Kosten.</p>
-        </div>
-      </div>
-      <div class="mk-faq-item">
-        <button class="mk-faq-question" onclick="toggleFaq(this)">
-          <span>Wie lange dauert es, bis meine Website online ist?</span>
-          <span class="mk-faq-icon">+</span>
-        </button>
-        <div class="mk-faq-answer">
-          <p>Deine Website ist innerhalb von 48 Stunden nach Bestellung live. Bei uns musst du nicht wochenlang warten.</p>
-        </div>
-      </div>
-      <div class="mk-faq-item">
-        <button class="mk-faq-question" onclick="toggleFaq(this)">
-          <span>Kann ich meine Website sp&auml;ter anpassen?</span>
-          <span class="mk-faq-icon">+</span>
-        </button>
-        <div class="mk-faq-answer">
-          <p>Ja, du kannst jederzeit &Auml;nderungen an Texten, Bildern und Inhalten anfragen. Schreib uns einfach eine E-Mail an info@meine-kmu.ch.</p>
-        </div>
-      </div>
-      <div class="mk-faq-item">
-        <button class="mk-faq-question" onclick="toggleFaq(this)">
-          <span>Brauche ich technische Kenntnisse?</span>
-          <span class="mk-faq-icon">+</span>
-        </button>
-        <div class="mk-faq-answer">
-          <p>Nein, gar nicht. Du sagst uns was du brauchst und wir k&uuml;mmern uns um alles Technische. Du musst nichts installieren oder programmieren.</p>
-        </div>
-      </div>
-      <div class="mk-faq-item">
-        <button class="mk-faq-question" onclick="toggleFaq(this)">
-          <span>Kann ich mein Abo jederzeit k&uuml;ndigen?</span>
-          <span class="mk-faq-icon">+</span>
-        </button>
-        <div class="mk-faq-answer">
-          <p>Ja, du kannst dein Abo jederzeit zum Monatsende k&uuml;ndigen. Es gibt keine Mindestlaufzeit.</p>
-        </div>
-      </div>
-      <div class="mk-faq-item">
-        <button class="mk-faq-question" onclick="toggleFaq(this)">
-          <span>Bekomme ich eine eigene Domain (z.B. meinefirma.ch)?</span>
-          <span class="mk-faq-icon">+</span>
-        </button>
-        <div class="mk-faq-answer">
-          <p>Ja, wir helfen dir eine passende .ch oder .com Domain zu finden und richten alles f&uuml;r dich ein.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
 <div data-w-id="7e22d0c9-475e-4dd9-d818-d70567087cbd" class="_03-cta">
 <div class="cta-outer">
 <div class="cta-inner">
@@ -769,7 +723,7 @@ document.addEventListener('keydown', function(e) {
     <a href="#" onclick="openModal('kontaktModal');return false;">Kontakt</a>
     <a href="#" onclick="openModal('agbModal');return false;">AGBs</a>
     <a href="#" onclick="openModal('impressumModal');return false;">Impressum</a>
-    <a href="#faq">FAQ</a>
+    <a href="#" onclick="openModal('faqModal');return false;">FAQ</a>
     <a href="https://billing.stripe.com/p/login/28E14m46YbtV78O8wd7bW00" target="_blank" rel="noopener">Abonnement verwalten</a>
   </div>
   <span>&copy; 2026 meine-kmu. Z&uuml;rich, Schweiz.</span>
@@ -1499,90 +1453,8 @@ a, button, [role="button"], input[type="submit"] { cursor: pointer !important; }
 <script>(function(){var CARD_SELECTOR=".card-4";function fitPerson(person){var bio=person&&person.querySelector(".about-bio");if(!bio)return;var offset=bio.offsetTop-person.offsetTop;var available=Math.max(0,person.clientHeight-offset-12);if(available<24)return;var vw=Math.max(window.innerWidth||0,document.documentElement.clientWidth||0);var min=vw<=479?11.2:vw<=991?11.8:13.2;var max=vw<=479?15.2:vw<=991?16.2:19.2;var low=min;var high=max;var best=min;for(var i=0;i<14;i+=1){var mid=(low+high)/2;bio.style.setProperty("--about-bio-font-size",mid.toFixed(2)+"px");bio.style.setProperty("--about-bio-line-height",(mid*1.38).toFixed(2)+"px");if(bio.scrollHeight<=available+1){best=mid;low=mid;}else{high=mid;}}bio.style.setProperty("--about-bio-font-size",best.toFixed(2)+"px");bio.style.setProperty("--about-bio-line-height",(best*1.38).toFixed(2)+"px");}var raf=0;function runFit(){raf=0;var people=document.querySelectorAll(CARD_SELECTOR+" .about-person");for(var i=0;i<people.length;i+=1){fitPerson(people[i]);}}function queueFit(){if(raf)return;raf=window.requestAnimationFrame(runFit);}if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",queueFit);}else{queueFit();}window.addEventListener("load",queueFit,{passive:true});window.addEventListener("resize",queueFit,{passive:true});window.addEventListener("orientationchange",queueFit,{passive:true});if(window.visualViewport){window.visualViewport.addEventListener("resize",queueFit,{passive:true});}if("ResizeObserver" in window){var ro=new ResizeObserver(queueFit);var shell=document.querySelector(CARD_SELECTOR+" .about-shell");if(shell)ro.observe(shell);var photos=document.querySelectorAll(CARD_SELECTOR+" .about-photo");for(var j=0;j<photos.length;j+=1){ro.observe(photos[j]);}}if(document.fonts&&document.fonts.ready){document.fonts.ready.then(queueFit).catch(function(){});}var tries=0;var t=window.setInterval(function(){queueFit();tries+=1;if(tries>=12){window.clearInterval(t);}},300);})();</script>
 
 
-<!-- FAQ, FOOTER, MODAL STYLES -->
+<!-- FOOTER + MODAL STYLES -->
 <style>
-/* Reduce CTA green gap — collapse scroll-animation height when FAQ precedes it */
-.mk-faq-section + ._03-cta {
-  height: auto !important;
-  min-height: 100vh;
-}
-
-/* FAQ Section */
-.mk-faq-section {
-  background: #0a0a0a;
-  padding: 10vh 6vw 10vh;
-  position: relative;
-  z-index: 10;
-}
-.mk-faq-inner {
-  max-width: 780px;
-  margin: 0 auto;
-}
-.mk-faq-eyebrow {
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: #888;
-  margin-bottom: 1.25rem;
-  text-align: center;
-}
-.mk-faq-headline {
-  font-size: clamp(2.2rem, 5vw, 4.5rem);
-  font-weight: 800;
-  letter-spacing: -0.045em;
-  line-height: 1.02;
-  margin-bottom: 3rem;
-  text-align: center;
-  color: #fff;
-  font-family: 'ClashDisplay', 'Inter', sans-serif;
-}
-.mk-faq-item {
-  border-bottom: 1px solid #222;
-}
-.mk-faq-item:first-child {
-  border-top: 1px solid #222;
-}
-.mk-faq-question {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.25rem 0;
-  background: none;
-  border: none;
-  color: #fff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 1.05rem;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-.mk-faq-question:hover { color: #a6ff00; }
-.mk-faq-icon {
-  font-size: 1.5rem;
-  font-weight: 300;
-  flex-shrink: 0;
-  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  color: #888;
-}
-.mk-faq-icon {
-  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
-.mk-faq-answer {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), padding-bottom 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
-  padding: 0;
-}
-.mk-faq-answer p {
-  font-size: 0.95rem;
-  color: #888;
-  line-height: 1.65;
-}
-
 /* Footer */
 .mk-footer {
   background: #a6ff00;

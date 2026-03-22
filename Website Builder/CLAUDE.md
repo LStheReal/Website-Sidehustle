@@ -54,6 +54,7 @@ Automated pipeline that finds businesses without websites, builds websites for t
 ### Domain & Deployment
 - `find-domain` — Find 3 available .ch/.com domains, check via RDAP/WHOIS, update Google Sheet with clickable buy links.
 - `deploy-website` — Deploy static sites to Cloudflare Pages (free), update Google Sheet with live URL.
+- `process-order` — **Post-order automation**: triggered automatically after "Website jetzt bestellen" is clicked. Builds the final site, deploys to a unique `kmu-<slug>-<id>.pages.dev` subdomain, updates the sheet, sends internal notification to info@meine-kmu.ch (with live URL, domain purchase link, Cloudflare setup link, lead email), and sends customer thank-you email with 48h promise.
 
 ### Outreach
 - `cold-email` — Generate personalized German cold emails (Day 0 intro + Day 7 follow-up + Day 14 breakup) with 3 live website links.

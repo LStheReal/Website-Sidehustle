@@ -97,7 +97,7 @@ def generate_day0_email(
 
     <p>Wir haben festgestellt, dass Ihr Betrieb noch keine Webseite hat. Deshalb haben wir Ihnen gleich 4 erstellt.</p>
 
-    <p style="color: #555; font-size: 14px;">Heute suchen über 80% der Kunden zuerst online nach einem Betrieb. Eine eigene Webseite macht Sie sichtbar und weckt Vertrauen, noch bevor jemand anruft.</p>
+    <p>Heute suchen über 80% der Kunden zuerst online nach einem Betrieb. Eine eigene Webseite macht Sie sichtbar und weckt Vertrauen, noch bevor jemand anruft.</p>
 
     <p>Klicken Sie auf ein Design, um es anzuschauen:</p>
 
@@ -133,7 +133,7 @@ def generate_day0_email(
       </tr>
     </table>
 
-    <p style="font-size: 14px; color: #555;">Jedes Design ist vollständig nach Ihren Wünschen anpassbar: Farben, Texte, Bilder und Logo. Kein Technik-Wissen nötig.</p>
+    <p>Jedes Design ist vollständig nach Ihren Wünschen anpassbar: Farben, Texte, Bilder und Logo. Kein Technik-Wissen nötig.</p>
 
     <p>Gefällt Ihnen eine davon? Erhalten Sie Zugriff auf <strong>meine-kmu.ch</strong> mit Ihrem persönlichen Code:</p>
 
@@ -149,7 +149,8 @@ def generate_day0_email(
     <p style="margin-bottom: 0;">Freundliche Grüsse<br>
     <strong>{sender_name}</strong><br>
     <span style="color: #555;">{sender_email}</span><br>
-    <span style="color: #555;">{sender_phone}</span></p>
+    <span style="color: #555;">{sender_phone}</span><br>
+    <a href="https://meine-kmu.ch" style="color: #555;">meine-kmu.ch</a></p>
 
   </div>
 
@@ -182,7 +183,8 @@ Bei Fragen antworten Sie einfach auf diese E-Mail.
 Freundliche Grüsse
 {sender_name}
 {sender_email}
-{sender_phone}"""
+{sender_phone}
+meine-kmu.ch"""
 
     return {
         "variant": "day_0_cold_intro",

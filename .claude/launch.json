@@ -19,6 +19,18 @@
       "runtimeArgs": ["server.py"],
       "cwd": "Website Builder",
       "port": 8090
+    },
+    {
+      "name": "cf-landing",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8091", "--directory", "Website Builder/cf-dashboard"],
+      "port": 8091
+    },
+    {
+      "name": "website-builder",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8092", "--directory", "Website Builder"],
+      "port": 8092
     }
   ]
 }

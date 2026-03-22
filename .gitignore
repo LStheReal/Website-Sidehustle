@@ -12,3 +12,7 @@ Website Builder/.env
 
 # Wrangler
 .wrangler/
+
+# OAuth tokens (sensitive)
+token.json
+**/token.json

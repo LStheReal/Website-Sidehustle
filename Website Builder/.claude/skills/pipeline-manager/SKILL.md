@@ -59,7 +59,7 @@ python3 .claude/skills/pipeline-manager/scripts/pipeline_manager.py \
 | `website_created` | Generate cold email or call script | Send email or call |
 | `email_sent` | Check timing, generate follow-up | Send follow-up or call |
 | `responded` | Generate onboarding email, find domains | Send onboarding email |
-| `website_creating` | Build final site, deploy, generate delivery + invoice | Buy domain, send delivery email, send invoice |
+| `website_creating` | **Run `process-order` skill** — builds site, deploys, sends both emails automatically | Buy domain, connect domain in Cloudflare |
 | `sold` / `rejected` | No action | — |
 
 ## Output

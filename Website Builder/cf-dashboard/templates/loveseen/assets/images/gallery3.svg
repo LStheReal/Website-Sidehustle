@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="g3Bg" x1="0.3" y1="0" x2="0.7" y2="1">
+      <stop offset="0%" stop-color="#3A2820"/>
+      <stop offset="50%" stop-color="#2E1C14"/>
+      <stop offset="100%" stop-color="#1C100A"/>
+    </linearGradient>
+    <radialGradient id="g3Glow" cx="0.45" cy="0.45" r="0.45">
+      <stop offset="0%" stop-color="#8B6848" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+    <radialGradient id="g3Vig" cx="0.5" cy="0.5" r="0.7">
+      <stop offset="0%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.5"/>
+    </radialGradient>
+    <filter id="g3B1"><feGaussianBlur stdDeviation="40"/></filter>
+    <filter id="g3B2"><feGaussianBlur stdDeviation="18"/></filter>
+    <filter id="g3B3"><feGaussianBlur stdDeviation="6"/></filter>
+    <filter id="g3Grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feBlend in="SourceGraphic" mode="multiply"/>
+    </filter>
+  </defs>
+
+  <!-- Dark moody base -->
+  <rect width="800" height="600" fill="url(#g3Bg)"/>
+  <rect width="800" height="600" fill="url(#g3Glow)"/>
+
+  <!-- Abstract warm light shapes — like candlelight or spotlight -->
+  <ellipse cx="350" cy="280" rx="250" ry="220" fill="#6B4830" opacity="0.3" filter="url(#g3B1)"/>
+  <ellipse cx="420" cy="320" rx="180" ry="160" fill="#8B6040" opacity="0.2" filter="url(#g3B1)"/>
+  <ellipse cx="380" cy="300" rx="120" ry="110" fill="#A07858" opacity="0.15" filter="url(#g3B2)"/>
+
+  <!-- Flowing silk/fabric curves -->
+  <path d="M0,200 Q200,150 350,250 Q500,350 650,250 Q750,200 800,240" stroke="#8B6848" stroke-width="100" fill="none" opacity="0.08" filter="url(#g3B1)" stroke-linecap="round"/>
+  <path d="M0,350 Q150,280 300,350 Q450,420 600,340 Q720,280 800,310" stroke="#7A5838" stroke-width="70" fill="none" opacity="0.06" filter="url(#g3B2)" stroke-linecap="round"/>
+  <path d="M0,450 Q200,400 400,450 Q600,500 800,430" stroke="#6B4830" stroke-width="50" fill="none" opacity="0.05" filter="url(#g3B2)" stroke-linecap="round"/>
+
+  <!-- Golden bokeh circles -->
+  <circle cx="200" cy="180" r="50" fill="#C8956A" opacity="0.06" filter="url(#g3B2)"/>
+  <circle cx="550" cy="150" r="35" fill="#D4A878" opacity="0.05" filter="url(#g3B2)"/>
+  <circle cx="650" cy="350" r="40" fill="#C8A078" opacity="0.04" filter="url(#g3B2)"/>
+  <circle cx="130" cy="400" r="30" fill="#B8886A" opacity="0.05" filter="url(#g3B2)"/>
+  <circle cx="480" cy="450" r="25" fill="#D4A878" opacity="0.04" filter="url(#g3B2)"/>
+  <circle cx="700" cy="180" r="20" fill="#C8956A" opacity="0.04" filter="url(#g3B3)"/>
+
+  <!-- Subtle rose/blush warmth -->
+  <ellipse cx="400" cy="300" rx="100" ry="80" fill="#C8808A" opacity="0.05" filter="url(#g3B1)"/>
+
+  <!-- Thin decorative lines — abstract elegance -->
+  <path d="M100,0 Q120,150 110,300 Q100,450 130,600" stroke="#7A5838" stroke-width="0.8" fill="none" opacity="0.1"/>
+  <path d="M600,0 Q580,120 590,280 Q600,420 580,600" stroke="#7A5838" stroke-width="0.6" fill="none" opacity="0.08"/>
+
+  <!-- Film grain -->
+  <rect width="800" height="600" filter="url(#g3Grain)" opacity="0.03"/>
+
+  <!-- Vignette -->
+  <rect width="800" height="600" fill="url(#g3Vig)"/>
+</svg>

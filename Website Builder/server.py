@@ -18,9 +18,12 @@ import io
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_from_directory, send_file
@@ -90,6 +93,7 @@ COL = {
     "chosen_template": 39,
     "next_action": 40,
     "next_action_date": 41,
+    "acquisition_source": 42,
 }
 
 COLUMN_NAMES = list(COL.keys())
@@ -269,6 +273,13 @@ def get_lead(lead_id):
             {"domain": f"{clean}-online.ch", "tld": ".ch", "available": True},
         ]
 
+    # Set acquisition_source to "outreach" if not already set (code-based leads were contacted)
+    if not lead.get("acquisition_source"):
+        try:
+            update_cells(worksheet, lead["_row_idx"], {"acquisition_source": "outreach"})
+        except Exception as e:
+            print(f"Source update error: {e}")
+
     return jsonify({
         "lead_id": lead_id,
         "business_name": business_name,
@@ -284,6 +295,101 @@ def get_lead(lead_id):
         "chosen_template": lead.get("chosen_template", ""),
         "notes": lead.get("notes", ""),
     })
+
+
+@app.route("/api/lead/register", methods=["POST"])
+def register_lead():
+    """Register a new lead from email (no-code flow)."""
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+
+    if not email or not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
+        return jsonify({"error": "Bitte gib eine g\u00fcltige E-Mail-Adresse ein."}), 400
+
+    try:
+        _, worksheet = open_sheet()
+    except Exception as e:
+        print(f"Sheet error: {e}")
+        return jsonify({"error": "Verbindungsfehler."}), 500
+
+    # Generate a 12-char hex lead_id
+    import time
+    raw = f"{email}{time.time()}".encode()
+    lead_id = hashlib.sha256(raw).hexdigest()[:12]
+
+    # Build a new row with minimal data
+    now = datetime.now().isoformat()
+    row = [""] * len(COLUMN_NAMES)
+    row[COL["lead_id"] - 1] = lead_id
+    row[COL["scraped_at"] - 1] = now
+    row[COL["owner_email"] - 1] = email
+    row[COL["emails"] - 1] = email
+    row[COL["status"] - 1] = "registered_no_code"
+    row[COL["acquisition_source"] - 1] = "organic"
+
+    try:
+        worksheet.append_row(row, value_input_option="USER_ENTERED")
+    except Exception as e:
+        print(f"Append error: {e}")
+        return jsonify({"error": "Registrierung fehlgeschlagen."}), 500
+
+    template_keys = ["earlydog", "bia", "liveblocks", "loveseen"]
+    return jsonify({
+        "lead_id": lead_id,
+        "business_name": "",
+        "category": "",
+        "city": "",
+        "phone": "",
+        "owner_email": email,
+        "owner_name": "",
+        "address": "",
+        "status": "registered_no_code",
+        "previews": [f"/api/preview/{lead_id}/{t}" for t in template_keys],
+        "domains": [],
+        "chosen_template": "",
+        "notes": "",
+    })
+
+
+@app.route("/api/lead/<lead_id>/update", methods=["POST"])
+def update_lead(lead_id):
+    """Update lead data (no-code flow: add business name, description etc.)."""
+    data = request.get_json(silent=True) or {}
+
+    try:
+        _, worksheet = open_sheet()
+        lead = find_lead_by_id(worksheet, lead_id)
+    except Exception as e:
+        print(f"Sheet error: {e}")
+        return jsonify({"error": "Verbindungsfehler."}), 500
+
+    if not lead:
+        return jsonify({"error": "Lead nicht gefunden."}), 404
+
+    updates = {}
+    if data.get("business_name"):
+        updates["business_name"] = data["business_name"]
+    if data.get("description") or data.get("values"):
+        try:
+            existing_notes = json.loads(lead.get("notes", "{}")) if lead.get("notes") else {}
+        except (json.JSONDecodeError, TypeError):
+            existing_notes = {}
+        existing_notes["description"] = data.get("description", "")
+        existing_notes["values"] = data.get("values", "")
+        updates["notes"] = json.dumps(existing_notes, ensure_ascii=False)
+    if data.get("category"):
+        updates["category"] = data["category"]
+    if data.get("city"):
+        updates["city"] = data["city"]
+
+    if updates:
+        try:
+            update_cells(worksheet, lead["_row_idx"], updates)
+        except Exception as e:
+            print(f"Update error: {e}")
+            return jsonify({"error": "Update fehlgeschlagen."}), 500
+
+    return jsonify({"success": True})
 
 
 @app.route("/api/lead/<lead_id>/order", methods=["POST"])
@@ -372,11 +478,71 @@ def submit_order(lead_id):
         print(f"Sheet update error: {e}")
         return jsonify({"error": "Fehler beim Speichern. Versuche es erneut."}), 500
 
+    # Build the static site now, while we still have the uploaded files in memory.
+    # This captures exactly what was shown in the preview (same AI cache key).
+    try:
+        logo_f = request.files.get("logo")
+        logo_bytes, logo_ext = None, None
+        if logo_f and logo_f.filename:
+            logo_f.stream.seek(0)
+            logo_bytes = logo_f.read()
+            logo_ext = os.path.splitext(logo_f.filename)[1] or ".png"
+
+        image_data = []
+        for img_f in request.files.getlist("images"):
+            if img_f.filename:
+                img_f.stream.seek(0)
+                ext = os.path.splitext(img_f.filename)[1] or ".jpg"
+                image_data.append((img_f.read(), ext))
+
+        build_customizations = {"description": description, "values": values}
+        _build_order_site(lead, chosen_template, build_customizations,
+                          logo_bytes, logo_ext, image_data)
+        print(f"[order] Site built for {lead_id}")
+    except Exception as e:
+        print(f"[order] Site build error (non-fatal): {e}")
+
+    # Trigger post-order processing in the background (deploy + emails)
+    _trigger_process_order(lead_id)
+
     return jsonify({
         "success": True,
         "message": "Bestellung erfolgreich!",
         "drive_folder": drive_folder_url,
     })
+
+
+def _trigger_process_order(lead_id: str):
+    """Fire-and-forget: run process_order.py in background after a confirmed order."""
+    import threading
+
+    script = os.path.join(
+        PROJECT_ROOT,
+        ".claude", "skills", "process-order", "scripts", "process_order.py",
+    )
+    if not os.path.exists(script):
+        print(f"Warning: process_order.py not found at {script}")
+        return
+
+    def run():
+        try:
+            result = subprocess.run(
+                [sys.executable, script, "--lead-id", lead_id],
+                cwd=PROJECT_ROOT,
+                capture_output=True,
+                text=True,
+                timeout=300,  # 5-minute max
+            )
+            if result.returncode != 0:
+                print(f"[process-order] Error for {lead_id}:\n{result.stderr}")
+            else:
+                print(f"[process-order] Done for {lead_id}:\n{result.stdout[-500:]}")
+        except Exception as e:
+            print(f"[process-order] Exception for {lead_id}: {e}")
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    print(f"[process-order] Background job started for {lead_id}")
 
 
 # ============================================================
@@ -677,6 +843,102 @@ def _build_replacements(lead: dict, customizations: dict = None) -> dict:
     }
 
     return replacements
+
+
+def _build_order_site(
+    lead: dict,
+    template_key: str,
+    customizations: dict,
+    logo_bytes: bytes | None,
+    logo_ext: str | None,
+    image_data: list,
+) -> str:
+    """Build the deployable static site exactly as shown in the preview.
+
+    Copies the template, applies AI-generated text (using the cached result from
+    the preview if available), saves uploaded customer images as real files, and
+    injects them into the HTML.  Returns the path to the built site directory.
+    """
+    lead_id = lead.get("lead_id", "unknown")
+    site_dir = os.path.join(PROJECT_ROOT, ".tmp", f"order_{lead_id}")
+    template_path = os.path.join(PROJECT_ROOT, TEMPLATE_DIRS[template_key])
+
+    # Copy template
+    if os.path.exists(site_dir):
+        shutil.rmtree(site_dir)
+    shutil.copytree(template_path, site_dir)
+
+    # Generate text content — same cache key as the preview, so this is a cache hit
+    replacements = None
+    if customizations.get("description") or customizations.get("values"):
+        replacements = _generate_content_with_ai(lead, template_key, customizations)
+    if not replacements:
+        replacements = _build_replacements(lead, customizations)
+
+    # Apply text replacements to all HTML files
+    for html_file in Path(site_dir).rglob("*.html"):
+        content = html_file.read_text(encoding="utf-8")
+        for key, value in replacements.items():
+            content = content.replace("{{" + key + "}}", str(value))
+        content = re.sub(r"\{\{[A-Z_0-9]+\}\}", "", content)
+        html_file.write_text(content, encoding="utf-8")
+
+    # Work on index.html for image injection
+    index_path = os.path.join(site_dir, "index.html")
+    with open(index_path, "r", encoding="utf-8") as f:
+        html = f.read()
+
+    assets_img_dir = os.path.join(site_dir, "assets", "images")
+    os.makedirs(assets_img_dir, exist_ok=True)
+
+    # Save and inject customer logo
+    if logo_bytes and logo_ext:
+        logo_filename = f"customer_logo{logo_ext}"
+        with open(os.path.join(assets_img_dir, logo_filename), "wb") as f:
+            f.write(logo_bytes)
+        logo_rel = f"assets/images/{logo_filename}"
+        logo_img = f'<img src="{logo_rel}" alt="Logo" style="height:40px;width:auto;object-fit:contain;">'
+        footer_logo_img = f'<img src="{logo_rel}" alt="Logo" style="height:32px;width:auto;object-fit:contain;">'
+        html = re.sub(
+            r'(<(?:a|div)[^>]*class="[^"]*nav-logo[^"]*"[^>]*>)([\s\S]*?)(</(?:a|div)>)',
+            r'\g<1>' + logo_img + r'\g<3>',
+            html, flags=re.IGNORECASE, count=1,
+        )
+        html = re.sub(
+            r'(<(?:a|div|span)[^>]*class="[^"]*(?:contact-logo|footer-logo(?:-text)?)[^"]*"[^>]*>)([\s\S]*?)(</(?:a|div|span)>)',
+            r'\g<1>' + footer_logo_img + r'\g<3>',
+            html, flags=re.IGNORECASE, count=1,
+        )
+
+    # Save customer images and inject into HTML image slots
+    # Matches img tags whose src points to assets/ (template placeholder images)
+    if image_data:
+        img_tag_re = re.compile(
+            r'(<img\s[^>]*?)src="(assets/[^"]*)"([^>]*?>)', re.IGNORECASE
+        )
+        matches = list(img_tag_re.finditer(html))
+
+        customer_srcs = []
+        for i, (img_bytes, ext) in enumerate(image_data):
+            filename = f"customer_img_{i + 1}{ext}"
+            with open(os.path.join(assets_img_dir, filename), "wb") as f:
+                f.write(img_bytes)
+            customer_srcs.append(f"assets/images/{filename}")
+
+        # Replace from end to keep string offsets valid
+        for i in range(min(len(customer_srcs), len(matches)) - 1, -1, -1):
+            m = matches[i]
+            new_tag = (
+                m.group(1)
+                + f'src="{customer_srcs[i]}" style="object-fit:cover;width:100%;height:100%;"'
+                + m.group(3)
+            )
+            html = html[: m.start()] + new_tag + html[m.end() :]
+
+    with open(index_path, "w", encoding="utf-8") as f:
+        f.write(html)
+
+    return site_dir
 
 
 @app.route("/api/upload-temp", methods=["POST"])

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{BUSINESS_NAME}} — {{TAGLINE}}</title>
+    <meta name="description" content="{{META_DESCRIPTION}}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-logo">
+            <a href="#top">{{BUSINESS_NAME}}</a>
+        </div>
+        <div class="nav-cta">
+            <a href="#contact" class="nav-link">
+                <span>Kontakt</span>
+                <svg width="12" height="14" viewBox="0 0 12 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 7L0 13.928V0.072L12 7Z" fill="currentColor"/>
+                </svg>
+            </a>
+        </div>
+    </nav>
+
+    <main>
+        <!-- Hero Section -->
+        <section class="hero" id="top">
+            <div class="container">
+                <div class="hero-grid">
+                    <div class="hero-text">
+                        <h1>{{HERO_TITLE_LINE1}}<br><span class="text-blue">{{HERO_TITLE_LINE2}}</span></h1>
+                        <p class="hero-description">{{HERO_DESCRIPTION}}</p>
+                    </div>
+                    <div class="hero-image">
+                        <img src="assets/images/hero.svg" alt="{{BUSINESS_NAME}}">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Service Section 1 -->
+        <section class="feature-section">
+            <div class="container">
+                <div class="feature-grid">
+                    <div class="feature-image">
+                        <img src="assets/images/section1.svg" alt="{{SERVICE_1_TITLE}}">
+                    </div>
+                    <div class="feature-text">
+                        <h3>{{SERVICE_1_TITLE}}</h3>
+                        <p>{{SERVICE_1_DESCRIPTION}}</p>
+                        <a href="#contact" class="btn-outline">{{SERVICE_1_CTA}}</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Service Section 2 -->
+        <section class="feature-section">
+            <div class="container">
+                <div class="feature-grid feature-grid-reverse">
+                    <div class="feature-image">
+                        <img src="assets/images/section2.svg" alt="{{SERVICE_2_TITLE}}">
+                    </div>
+                    <div class="feature-text">
+                        <h3>{{SERVICE_2_TITLE}}</h3>
+                        <p>{{SERVICE_2_DESCRIPTION}}</p>
+                        <a href="#contact" class="btn-outline">{{SERVICE_2_CTA}}</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Service Section 3 -->
+        <section class="feature-section">
+            <div class="container">
+                <div class="feature-grid">
+                    <div class="feature-image">
+                        <img src="assets/images/section3.svg" alt="{{SERVICE_3_TITLE}}">
+                    </div>
+                    <div class="feature-text">
+                        <h3>{{SERVICE_3_TITLE}}</h3>
+                        <p>{{SERVICE_3_DESCRIPTION}}</p>
+                        <a href="#contact" class="btn-outline">{{SERVICE_3_CTA}}</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA Section -->
+        <section class="cta-section" id="contact">
+            <div class="container">
+                <hr class="divider">
+                <h2>{{CTA_TITLE_LINE1}} <span class="text-blue">{{CTA_TITLE_LINE2}}</span></h2>
+                <a href="tel:{{PHONE}}" class="btn-primary">Kontaktieren Sie uns</a>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-links">
+                <a href="#top">Home</a>
+                <a href="#contact">Kontakt</a>
+                <a href="tel:{{PHONE}}">{{PHONE}}</a>
+                <a href="mailto:{{EMAIL}}">{{EMAIL}}</a>
+            </div>
+            <div class="footer-bottom">
+                <span>{{ADDRESS}}</span>
+                <span>&copy; {{BUSINESS_NAME}}</span>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

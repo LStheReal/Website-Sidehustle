@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 750" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="aBg" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#F5ECE6"/>
+      <stop offset="60%" stop-color="#E8DCD2"/>
+      <stop offset="100%" stop-color="#DDD0C6"/>
+    </linearGradient>
+    <radialGradient id="aGlow" cx="0.5" cy="0.4" r="0.5">
+      <stop offset="0%" stop-color="#F8F0EA" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+    <filter id="aBlur1"><feGaussianBlur stdDeviation="40"/></filter>
+    <filter id="aBlur2"><feGaussianBlur stdDeviation="20"/></filter>
+    <filter id="aBlur3"><feGaussianBlur stdDeviation="8"/></filter>
+  </defs>
+
+  <!-- Warm cream background -->
+  <rect width="600" height="750" fill="url(#aBg)"/>
+  <rect width="600" height="750" fill="url(#aGlow)"/>
+
+  <!-- Abstract organic shapes — warm terracotta and blush tones -->
+  <!-- Main large shape — like a soft fabric drape -->
+  <ellipse cx="320" cy="350" rx="220" ry="280" fill="#C8A088" opacity="0.25" filter="url(#aBlur1)"/>
+  <ellipse cx="250" cy="300" rx="180" ry="220" fill="#D4AC90" opacity="0.2" filter="url(#aBlur1)"/>
+
+  <!-- Floating organic blobs — like cream or petals -->
+  <ellipse cx="400" cy="200" rx="120" ry="100" fill="#D4A080" opacity="0.18" filter="url(#aBlur2)"/>
+  <ellipse cx="180" cy="500" rx="140" ry="120" fill="#C89878" opacity="0.15" filter="url(#aBlur2)"/>
+  <ellipse cx="450" cy="550" rx="100" ry="80" fill="#B88868" opacity="0.12" filter="url(#aBlur2)"/>
+
+  <!-- Delicate rose/blush accents -->
+  <circle cx="350" cy="280" r="60" fill="#D4949A" opacity="0.1" filter="url(#aBlur2)"/>
+  <circle cx="200" cy="400" r="45" fill="#C88890" opacity="0.08" filter="url(#aBlur2)"/>
+
+  <!-- Subtle marble veining texture -->
+  <path d="M50,100 Q150,150 200,120 Q300,80 400,140 Q500,200 550,160" stroke="#C8B8A8" stroke-width="0.8" fill="none" opacity="0.12"/>
+  <path d="M0,280 Q100,260 200,300 Q350,340 450,290 Q550,250 600,280" stroke="#C8B8A8" stroke-width="0.6" fill="none" opacity="0.1"/>
+  <path d="M30,450 Q130,420 250,460 Q380,500 480,450 Q560,420 600,440" stroke="#C8B8A8" stroke-width="0.7" fill="none" opacity="0.08"/>
+  <path d="M0,600 Q120,580 220,620 Q340,650 450,610 Q540,580 600,600" stroke="#C8B8A8" stroke-width="0.5" fill="none" opacity="0.08"/>
+
+  <!-- Gold leaf flecks -->
+  <g opacity="0.12">
+    <circle cx="280" cy="250" r="3" fill="#C8A068"/>
+    <circle cx="350" cy="180" r="2" fill="#C8A068"/>
+    <circle cx="200" cy="350" r="2.5" fill="#C8A068"/>
+    <circle cx="420" cy="400" r="2" fill="#C8A068"/>
+    <circle cx="150" cy="200" r="1.5" fill="#C8A068"/>
+    <circle cx="450" cy="300" r="2" fill="#C8A068"/>
+    <circle cx="300" cy="500" r="2.5" fill="#C8A068"/>
+    <circle cx="380" cy="600" r="1.5" fill="#C8A068"/>
+  </g>
+
+  <!-- Dried flower stems — minimal line art -->
+  <g opacity="0.15">
+    <path d="M480,50 Q470,150 475,300 Q478,400 472,500" stroke="#9A8878" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+    <ellipse cx="485" cy="100" rx="12" ry="6" fill="#A89078" transform="rotate(15 485 100)"/>
+    <ellipse cx="468" cy="180" rx="10" ry="5" fill="#A89078" transform="rotate(-10 468 180)"/>
+    <ellipse cx="478" cy="260" rx="11" ry="5.5" fill="#A89078" transform="rotate(8 478 260)"/>
+  </g>
+
+  <!-- Soft warm overlay -->
+  <rect width="600" height="750" fill="#F0E4D8" opacity="0.04"/>
+</svg>

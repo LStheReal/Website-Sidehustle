@@ -1,0 +1,8 @@
+/fonts/*
+  Cache-Control: public, max-age=31536000
+
+/templates/*/assets/*
+  Cache-Control: public, max-age=86400
+
+/api/*
+  Cache-Control: no-store

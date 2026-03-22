@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{BUSINESS_NAME}} — {{TAGLINE}}</title>
+    <meta name="description" content="{{META_DESCRIPTION}}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-inner">
+            <a href="#top" class="nav-logo">
+                <svg class="nav-logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4 6h16M4 12h16M4 18h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <span>{{BUSINESS_NAME_SHORT}}</span>
+            </a>
+            <div class="nav-links">
+                <a href="#services">Leistungen</a>
+                <a href="#about">Über uns</a>
+                <a href="#contact">Kontakt</a>
+            </div>
+            <div class="nav-actions">
+                <a href="tel:{{PHONE}}" class="nav-cta">{{PHONE_SHORT}}</a>
+            </div>
+            <button class="nav-hamburger" aria-label="Menü öffnen">
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Mobile Menu -->
+    <div class="mobile-menu">
+        <a href="#services" class="mobile-menu-link">Leistungen</a>
+        <a href="#about" class="mobile-menu-link">Über uns</a>
+        <a href="#contact" class="mobile-menu-link">Kontakt</a>
+        <a href="tel:{{PHONE}}" class="mobile-menu-link mobile-menu-cta">Anrufen →</a>
+    </div>
+
+    <main>
+        <!-- Hero Section — Dark, Full Width -->
+        <section class="hero" id="top">
+            <div class="hero-bg">
+                <div class="hero-gradient"></div>
+            </div>
+            <div class="hero-content">
+                <span class="hero-label">{{SECTION_LABEL_HERO}}</span>
+                <h1>{{HERO_TITLE_LINE1}}<br>{{HERO_TITLE_LINE2}}<br><span class="typewriter-wrapper"><span class="text-gradient typewriter-text" id="typewriter">{{HERO_WORD_1}}</span><span class="typewriter-cursor">|</span></span></h1>
+                <p class="hero-description">{{HERO_DESCRIPTION}}</p>
+                <div class="hero-actions">
+                    <a href="#contact" class="btn btn-primary">{{CTA_BUTTON_PRIMARY}}</a>
+                    <a href="#services" class="btn btn-secondary">{{CTA_BUTTON_SECONDARY}}</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Logos / Trust Bar -->
+        <section class="trust-bar">
+            <div class="container">
+                <p class="trust-label">{{TRUST_LABEL}}</p>
+                <div class="trust-stats">
+                    <div class="trust-stat">
+                        <span class="trust-stat-number">{{STAT_1_NUMBER}}</span>
+                        <span class="trust-stat-label">{{STAT_1_LABEL}}</span>
+                    </div>
+                    <div class="trust-stat">
+                        <span class="trust-stat-number">{{STAT_2_NUMBER}}</span>
+                        <span class="trust-stat-label">{{STAT_2_LABEL}}</span>
+                    </div>
+                    <div class="trust-stat">
+                        <span class="trust-stat-number">{{STAT_3_NUMBER}}</span>
+                        <span class="trust-stat-label">{{STAT_3_LABEL}}</span>
+                    </div>
+                    <div class="trust-stat">
+                        <span class="trust-stat-number">{{STAT_4_NUMBER}}</span>
+                        <span class="trust-stat-label">{{STAT_4_LABEL}}</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Services Section — Light -->
+        <section class="services" id="services">
+            <div class="container">
+                <div class="section-header">
+                    <span class="section-label">{{SECTION_LABEL_SERVICES}}</span>
+                    <h2>{{SERVICES_HEADING}}</h2>
+                    <p class="section-description">{{SERVICES_DESCRIPTION}}</p>
+                </div>
+                <div class="services-grid">
+                    <div class="service-card">
+                        <div class="service-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                        </div>
+                        <h3>{{SERVICE_1_TITLE}}</h3>
+                        <p>{{SERVICE_1_DESCRIPTION}}</p>
+                    </div>
+                    <div class="service-card">
+                        <div class="service-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                        </div>
+                        <h3>{{SERVICE_2_TITLE}}</h3>
+                        <p>{{SERVICE_2_DESCRIPTION}}</p>
+                    </div>
+                    <div class="service-card">
+                        <div class="service-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        </div>
+                        <h3>{{SERVICE_3_TITLE}}</h3>
+                        <p>{{SERVICE_3_DESCRIPTION}}</p>
+                    </div>
+                    <div class="service-card">
+                        <div class="service-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                        </div>
+                        <h3>{{SERVICE_4_TITLE}}</h3>
+                        <p>{{SERVICE_4_DESCRIPTION}}</p>
+                    </div>
+                    <div class="service-card">
+                        <div class="service-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        </div>
+                        <h3>{{SERVICE_5_TITLE}}</h3>
+                        <p>{{SERVICE_5_DESCRIPTION}}</p>
+                    </div>
+                    <div class="service-card">
+                        <div class="service-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        </div>
+                        <h3>{{SERVICE_6_TITLE}}</h3>
+                        <p>{{SERVICE_6_DESCRIPTION}}</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Feature Highlight — Dark -->
+        <section class="feature-highlight">
+            <div class="container">
+                <div class="feature-grid">
+                    <div class="feature-text">
+                        <span class="section-label section-label-light">{{SECTION_LABEL_FEATURE}}</span>
+                        <h2>{{FEATURE_HEADING}}</h2>
+                        <p>{{FEATURE_DESCRIPTION}}</p>
+                        <ul class="feature-list">
+                            <li>{{FEATURE_POINT_1}}</li>
+                            <li>{{FEATURE_POINT_2}}</li>
+                            <li>{{FEATURE_POINT_3}}</li>
+                        </ul>
+                    </div>
+                    <div class="feature-visual">
+                        <img src="assets/images/feature.svg" alt="{{BUSINESS_NAME}}">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- About Section — Light -->
+        <section class="about" id="about">
+            <div class="container">
+                <div class="section-header">
+                    <span class="section-label">{{SECTION_LABEL_ABOUT}}</span>
+                    <h2>{{ABOUT_HEADING}}</h2>
+                </div>
+                <div class="about-grid">
+                    <div class="about-text">
+                        <p class="about-lead">{{ABOUT_LEAD}}</p>
+                        <p class="about-description">{{ABOUT_DESCRIPTION}}</p>
+                    </div>
+                    <div class="about-image">
+                        <img src="assets/images/about.svg" alt="{{BUSINESS_NAME}}">
+                    </div>
+                </div>
+                <div class="values-grid">
+                    <div class="value-card">
+                        <h4>{{VALUE_1_TITLE}}</h4>
+                        <p>{{VALUE_1_DESCRIPTION}}</p>
+                    </div>
+                    <div class="value-card">
+                        <h4>{{VALUE_2_TITLE}}</h4>
+                        <p>{{VALUE_2_DESCRIPTION}}</p>
+                    </div>
+                    <div class="value-card">
+                        <h4>{{VALUE_3_TITLE}}</h4>
+                        <p>{{VALUE_3_DESCRIPTION}}</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA Section — Dark Gradient -->
+        <section class="cta-section">
+            <div class="cta-glow"></div>
+            <div class="container">
+                <h2>{{CTA_HEADING_LINE1}}<br>{{CTA_HEADING_LINE2}}</h2>
+                <p class="cta-description">{{CTA_DESCRIPTION}}</p>
+                <div class="cta-actions">
+                    <a href="tel:{{PHONE}}" class="btn btn-primary">{{CTA_BUTTON_PRIMARY}}</a>
+                    <a href="mailto:{{EMAIL}}" class="btn btn-secondary">{{CTA_BUTTON_SECONDARY}}</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Contact Section -->
+        <section class="contact" id="contact">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Kontakt</h2>
+                </div>
+                <div class="contact-grid">
+                    <div class="contact-card">
+                        <h3>{{CONTACT_CARD_1_TITLE}}</h3>
+                        <p>{{CONTACT_CARD_1_DESCRIPTION}}</p>
+                        <a href="tel:{{PHONE}}" class="btn btn-outline">{{PHONE}}</a>
+                    </div>
+                    <div class="contact-card">
+                        <h3>{{CONTACT_CARD_2_TITLE}}</h3>
+                        <p>{{CONTACT_CARD_2_DESCRIPTION}}</p>
+                        <a href="mailto:{{EMAIL}}" class="btn btn-outline">{{EMAIL}}</a>
+                    </div>
+                </div>
+                <div class="contact-details">
+                    <div class="contact-detail">
+                        <span class="contact-detail-label">Adresse</span>
+                        <span>{{ADDRESS}}</span>
+                    </div>
+                    <div class="contact-detail">
+                        <span class="contact-detail-label">Öffnungszeiten</span>
+                        <span>{{OPENING_HOURS}}</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer — Dark, Multi-Column -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-top">
+                <div class="footer-brand">
+                    <a href="#top" class="footer-logo">
+                        <svg class="footer-logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M4 6h16M4 12h16M4 18h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        <span>{{BUSINESS_NAME_SHORT}}</span>
+                    </a>
+                </div>
+                <div class="footer-columns">
+                    <div class="footer-col">
+                        <h4>{{FOOTER_COL_1_TITLE}}</h4>
+                        <a href="#services">{{FOOTER_COL_1_LINK_1}}</a>
+                        <a href="#services">{{FOOTER_COL_1_LINK_2}}</a>
+                        <a href="#services">{{FOOTER_COL_1_LINK_3}}</a>
+                    </div>
+                    <div class="footer-col">
+                        <h4>{{FOOTER_COL_2_TITLE}}</h4>
+                        <a href="#about">{{FOOTER_COL_2_LINK_1}}</a>
+                        <a href="#contact">{{FOOTER_COL_2_LINK_2}}</a>
+                        <a href="#contact">{{FOOTER_COL_2_LINK_3}}</a>
+                    </div>
+                    <div class="footer-col">
+                        <h4>Kontakt</h4>
+                        <a href="tel:{{PHONE}}">{{PHONE}}</a>
+                        <a href="mailto:{{EMAIL}}">{{EMAIL}}</a>
+                        <span class="footer-address">{{ADDRESS}}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <span>© {{BUSINESS_NAME}}</span>
+                <div class="footer-bottom-links">
+                    <span>{{ADDRESS}}</span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Mobile menu toggle
+        const hamburger = document.querySelector('.nav-hamburger');
+        const mobileMenu = document.querySelector('.mobile-menu');
+        const mobileLinks = document.querySelectorAll('.mobile-menu-link');
+
+        hamburger.addEventListener('click', () => {
+            hamburger.classList.toggle('active');
+            mobileMenu.classList.toggle('active');
+            document.body.classList.toggle('menu-open');
+        });
+
+        mobileLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                hamburger.classList.remove('active');
+                mobileMenu.classList.remove('active');
+                document.body.classList.remove('menu-open');
+            });
+        });
+
+        // Smooth scroll
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        });
+
+        // Nav background on scroll
+        const nav = document.querySelector('.nav');
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 50) {
+                nav.classList.add('nav-scrolled');
+            } else {
+                nav.classList.remove('nav-scrolled');
+            }
+        });
+
+        // Typewriter animation — cycles through 4 words
+        (function() {
+            const words = [
+                '{{HERO_WORD_1}}',
+                '{{HERO_WORD_2}}',
+                '{{HERO_WORD_3}}',
+                '{{HERO_WORD_4}}'
+            ];
+            const el = document.getElementById('typewriter');
+            if (!el) return;
+
+            let wordIndex = 0;
+            let charIndex = words[0].length;
+            let isDeleting = false;
+            let pauseTimer = null;
+
+            function type() {
+                const currentWord = words[wordIndex];
+
+                if (!isDeleting) {
+                    // Typing forward
+                    el.textContent = currentWord.substring(0, charIndex);
+                    charIndex++;
+                    if (charIndex > currentWord.length) {
+                        // Finished typing — pause before deleting
+                        isDeleting = true;
+                        pauseTimer = setTimeout(type, 2000);
+                        return;
+                    }
+                    pauseTimer = setTimeout(type, 80 + Math.random() * 40);
+                } else {
+                    // Deleting
+                    el.textContent = currentWord.substring(0, charIndex);
+                    charIndex--;
+                    if (charIndex < 0) {
+                        // Finished deleting — move to next word
+                        isDeleting = false;
+                        wordIndex = (wordIndex + 1) % words.length;
+                        charIndex = 0;
+                        pauseTimer = setTimeout(type, 400);
+                        return;
+                    }
+                    pauseTimer = setTimeout(type, 40 + Math.random() * 20);
+                }
+            }
+
+            // Start with first word fully displayed, then after 2s begin cycling
+            setTimeout(function() {
+                isDeleting = true;
+                type();
+            }, 2000);
+        })();
+    </script>
+
+</body>
+</html>

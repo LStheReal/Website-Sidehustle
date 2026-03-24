@@ -21,6 +21,12 @@ const COLUMN_NAMES = [
 
 const TEMPLATE_KEYS = ["earlydog", "bia", "liveblocks", "loveseen"];
 
+// ── Preview HTML Cache (in-memory, keyed by leadId) ──
+// Stores the generated HTML from preview so the order can reuse it without regenerating.
+// Entries expire after 30 minutes.
+const previewCache = new Map();
+const PREVIEW_CACHE_TTL = 30 * 60 * 1000;
+
 // ── Google OAuth ──────────────────────────────────────────
 async function getAccessToken(env) {
   const creds = JSON.parse(env.GOOGLE_CREDENTIALS_JSON);
@@ -130,32 +136,348 @@ const TEMPLATE_PLACEHOLDERS = {
   loveseen: ["BUSINESS_NAME","TAGLINE","META_DESCRIPTION","NAV_CTA","NAV_LINK_1","NAV_LINK_2","NAV_LINK_3","NAV_LINK_4","HERO_TITLE_LINE1","HERO_TITLE_LINE2","HERO_CTA","SECTION_LABEL_ABOUT","ABOUT_HEADING_LINE1","ABOUT_HEADING_LINE2","ABOUT_LEAD","ABOUT_DESCRIPTION","ABOUT_CTA","STATEMENT_LABEL","STATEMENT_LINE1","STATEMENT_LINE2","STATEMENT_LINE3","SECTION_LABEL_SERVICES","SERVICES_HEADING","SERVICE_1_TITLE","SERVICE_1_DESCRIPTION","SERVICE_2_TITLE","SERVICE_2_DESCRIPTION","SERVICE_3_TITLE","SERVICE_3_DESCRIPTION","SERVICES_CTA","GALLERY_LABEL","INSTAGRAM_HANDLE","INSTAGRAM_URL","CONTACT_TAGLINE","EMAIL_PLACEHOLDER","CONTACT_LABEL_PHONE","CONTACT_LABEL_EMAIL","CONTACT_LABEL_ADDRESS","CONTACT_LABEL_HOURS","PHONE","EMAIL","ADDRESS","OPENING_HOURS","FOOTER_PRIVACY","FOOTER_TERMS","FOOTER_YEAR"],
 };
 
-// Image slots per template: slot name → { file, description }
-const TEMPLATE_IMAGE_SLOTS = {
-  earlydog: [
-    { slot: "hero", file: "hero.svg", desc: "Grosses Hero-Bild oben auf der Seite (Vollbild, Blickfang)" },
-    { slot: "section1", file: "section1.svg", desc: "Service-Bereich 1 (zeigt erste Dienstleistung)" },
-    { slot: "section2", file: "section2.svg", desc: "Service-Bereich 2 (zeigt zweite Dienstleistung)" },
-    { slot: "section3", file: "section3.svg", desc: "Service-Bereich 3 (zeigt dritte Dienstleistung)" },
-  ],
-  bia: [
-    { slot: "hero", file: "hero.svg", desc: "Grosses Hero-Bild oben auf der Seite (Vollbild, Blickfang)" },
-    { slot: "showcase", file: "showcase.svg", desc: "Showcase/Portfolio-Bereich (zeigt Arbeit oder Produkte)" },
-    { slot: "cta", file: "cta.svg", desc: "Call-to-Action-Bereich (motivierend, einladend)" },
-    { slot: "contact", file: "contact.svg", desc: "Kontakt-Bereich (persönlich, einladend)" },
-  ],
-  liveblocks: [
-    { slot: "feature", file: "feature.svg", desc: "Feature/Highlight-Bereich (zeigt Hauptmerkmal)" },
-    { slot: "about", file: "about.svg", desc: "Über-uns-Bereich (Team, Geschäft, persönlich)" },
-  ],
-  loveseen: [
-    { slot: "hero", file: "hero.jpg", desc: "Grosses Hero-Bild oben (Vollbild, stimmungsvoll, Haupteindruck)" },
-    { slot: "about", file: "about.jpg", desc: "Über-uns-Bereich (Polaroid-Stil, persönlich, Team oder Inhaber)" },
-    { slot: "gallery1", file: "gallery1.jpg", desc: "Galerie Hauptbild (gross, zeigt beste Arbeit/Produkt)" },
-    { slot: "gallery2", file: "gallery2.jpg", desc: "Galerie klein 1 (ergänzend, Detail oder anderes Produkt)" },
-    { slot: "gallery3", file: "gallery3.jpg", desc: "Galerie klein 2 (ergänzend, Atmosphäre oder weiteres Produkt)" },
-  ],
+// ── IMAGE_SLOT_MAP per template (placeholder key → slot name) ──
+const IMAGE_SLOT_MAP = {
+  earlydog: { IMAGE_HERO: "professional workspace", IMAGE_SERVICE_1: "service consultation", IMAGE_SERVICE_2: "teamwork quality", IMAGE_SERVICE_3: "finished project result" },
+  bia: { IMAGE_HERO: "professional business hero", IMAGE_SHOWCASE: "showcase portfolio work", IMAGE_CTA: "modern workspace", IMAGE_CONTACT: "friendly team" },
+  liveblocks: { IMAGE_FEATURE: "professional feature highlight", IMAGE_ABOUT: "team at work" },
+  loveseen: { IMAGE_HERO: "elegant professional hero", IMAGE_ABOUT: "team portrait", IMAGE_GALLERY_1: "project result", IMAGE_GALLERY_2: "workspace detail", IMAGE_GALLERY_3: "finished work" },
 };
+
+// ── Template-specific PLACEHOLDER_DEFAULTS ──
+// Mirrors the Python generate_website.py defaults for each template
+const TEMPLATE_DEFAULTS = {
+  earlydog: {
+    BUSINESS_NAME: "Unser Unternehmen", TAGLINE: "Ihr Partner vor Ort", META_DESCRIPTION: "",
+    HERO_TITLE_LINE1: "Willkommen bei", HERO_TITLE_LINE2: "unserem Service",
+    HERO_DESCRIPTION: "Wir bieten professionelle Dienstleistungen für Ihr Unternehmen.",
+    SERVICE_1_TITLE: "Service 1", SERVICE_1_DESCRIPTION: "Beschreibung unseres ersten Services.", SERVICE_1_CTA: "Mehr erfahren",
+    SERVICE_2_TITLE: "Service 2", SERVICE_2_DESCRIPTION: "Beschreibung unseres zweiten Services.", SERVICE_2_CTA: "Mehr erfahren",
+    SERVICE_3_TITLE: "Service 3", SERVICE_3_DESCRIPTION: "Beschreibung unseres dritten Services.", SERVICE_3_CTA: "Mehr erfahren",
+    CTA_TITLE_LINE1: "Interesse geweckt?", CTA_TITLE_LINE2: "Kontaktieren Sie uns.",
+    PHONE: "", EMAIL: "", ADDRESS: "",
+    IMAGE_HERO: "assets/images/hero.svg", IMAGE_SERVICE_1: "assets/images/section1.svg",
+    IMAGE_SERVICE_2: "assets/images/section2.svg", IMAGE_SERVICE_3: "assets/images/section3.svg",
+  },
+  bia: {
+    BUSINESS_NAME: "Atelier Nord", BUSINESS_NAME_SHORT: "Atelier.", TAGLINE: "Qualität mit Handschlag", META_DESCRIPTION: "",
+    SECTION_LABEL_HERO: "Willkommen", HERO_TITLE_LINE1: "Saubere Arbeit,", HERO_TITLE_LINE2: "starkes", HERO_TITLE_LINE3: "Finish",
+    INTRO_TEXT: "Qualität und Verlässlichkeit", INTRO_DESCRIPTION: "Wir verbinden Präzision mit persönlicher Beratung für Ergebnisse mit Bestand.",
+    SECTION_LABEL_SERVICES: "Leistungen", SERVICES_HEADING: "Was wir bieten",
+    SERVICE_1_TITLE: "Beratung", SERVICE_1_DESCRIPTION: "Transparentes Erstgespräch zu Anforderungen und Ablauf.",
+    SERVICE_2_TITLE: "Ausführung", SERVICE_2_DESCRIPTION: "Termintreue und präzise Umsetzung.",
+    SERVICE_3_TITLE: "Feinschliff", SERVICE_3_DESCRIPTION: "Kontrolle aller Details für ein sauberes Resultat.",
+    SERVICE_4_TITLE: "Nachbetreuung", SERVICE_4_DESCRIPTION: "Langfristige Unterstützung nach Projektabschluss.",
+    SECTION_LABEL_ABOUT: "Über uns", ABOUT_HEADING: "Unser Anspruch", ABOUT_DESCRIPTION: "Strukturiert, termintreu und sauber bis ins Detail.",
+    STAT_1_NUMBER: "10+", STAT_1_LABEL: "Jahre Erfahrung", STAT_2_NUMBER: "500+", STAT_2_LABEL: "Projekte",
+    STAT_3_NUMBER: "100%", STAT_3_LABEL: "Engagement",
+    CTA_TITLE_LINE1: "Bereit für", CTA_TITLE_LINE2: "den nächsten", CTA_TITLE_LINE3: "Schritt?",
+    PHONE: "+41 44 123 45 67", EMAIL: "hallo@ateliernord.ch", ADDRESS: "Langstrasse 12, 8004 Zürich", OPENING_HOURS: "Di–Sa 9–18 Uhr",
+    IMAGE_HERO: "assets/images/hero.svg", IMAGE_SHOWCASE: "assets/images/showcase.svg",
+    IMAGE_CTA: "assets/images/cta.svg", IMAGE_CONTACT: "assets/images/contact.svg",
+  },
+  liveblocks: {
+    BUSINESS_NAME: "TechFlow", BUSINESS_NAME_SHORT: "TechFlow.", TAGLINE: "Digitale Lösungen", META_DESCRIPTION: "",
+    SECTION_LABEL_HERO: "Willkommen", HERO_TITLE_LINE1: "Moderne", HERO_TITLE_LINE2: "Lösungen für",
+    HERO_WORD_1: "Qualität", HERO_WORD_2: "Vertrauen", HERO_WORD_3: "Erfahrung", HERO_WORD_4: "Service",
+    HERO_DESCRIPTION: "Professionelle Dienstleistungen für Ihr Unternehmen.",
+    CTA_BUTTON_PRIMARY: "Jetzt anrufen", CTA_BUTTON_SECONDARY: "E-Mail senden",
+    TRUST_LABEL: "Vertrauen Sie uns", PHONE_SHORT: "Anrufen",
+    STAT_1_NUMBER: "10+", STAT_1_LABEL: "Jahre", STAT_2_NUMBER: "500+", STAT_2_LABEL: "Kunden",
+    STAT_3_NUMBER: "100%", STAT_3_LABEL: "Engagement", STAT_4_NUMBER: "24h", STAT_4_LABEL: "Erreichbar",
+    SECTION_LABEL_SERVICES: "Leistungen", SERVICES_HEADING: "Unsere Leistungen", SERVICES_DESCRIPTION: "Entdecken Sie unser Angebot.",
+    SERVICE_1_TITLE: "Beratung", SERVICE_1_DESCRIPTION: "Persönliche Beratung.",
+    SERVICE_2_TITLE: "Umsetzung", SERVICE_2_DESCRIPTION: "Professionelle Ausführung.",
+    SERVICE_3_TITLE: "Nachbetreuung", SERVICE_3_DESCRIPTION: "Langfristige Betreuung.",
+    SERVICE_4_TITLE: "Planung", SERVICE_4_DESCRIPTION: "Optimale Ergebnisse.",
+    SERVICE_5_TITLE: "Qualitätssicherung", SERVICE_5_DESCRIPTION: "Höchste Standards.",
+    SERVICE_6_TITLE: "Kundendienst", SERVICE_6_DESCRIPTION: "Schnell und zuverlässig.",
+    SECTION_LABEL_FEATURE: "Warum wir", FEATURE_HEADING: "Warum wir?",
+    FEATURE_DESCRIPTION: "Qualität und Kundennähe.", FEATURE_POINT_1: "Erfahrung", FEATURE_POINT_2: "Betreuung", FEATURE_POINT_3: "Faire Preise",
+    SECTION_LABEL_ABOUT: "Über uns", ABOUT_HEADING: "Über uns", ABOUT_LEAD: "Qualität und Vertrauen.",
+    ABOUT_DESCRIPTION: "Ihr Partner für professionelle Lösungen.",
+    VALUE_1_TITLE: "Qualität", VALUE_1_DESCRIPTION: "Höchste Ansprüche.", VALUE_2_TITLE: "Vertrauen", VALUE_2_DESCRIPTION: "Transparenz.",
+    VALUE_3_TITLE: "Innovation", VALUE_3_DESCRIPTION: "Moderne Lösungen.",
+    CTA_HEADING_LINE1: "Bereit für", CTA_HEADING_LINE2: "den nächsten Schritt?", CTA_DESCRIPTION: "Kontaktieren Sie uns.",
+    CONTACT_CARD_1_TITLE: "Telefon", CONTACT_CARD_1_DESCRIPTION: "Anrufen",
+    CONTACT_CARD_2_TITLE: "E-Mail", CONTACT_CARD_2_DESCRIPTION: "Schreiben",
+    PHONE: "", EMAIL: "", ADDRESS: "", OPENING_HOURS: "Mo–Fr 08:00–18:00",
+    FOOTER_COL_1_TITLE: "Navigation", FOOTER_COL_1_LINK_1: "Home", FOOTER_COL_1_LINK_2: "Leistungen", FOOTER_COL_1_LINK_3: "Kontakt",
+    FOOTER_COL_2_TITLE: "Rechtliches", FOOTER_COL_2_LINK_1: "Datenschutz", FOOTER_COL_2_LINK_2: "AGB", FOOTER_COL_2_LINK_3: "Impressum",
+    IMAGE_FEATURE: "assets/images/feature.svg", IMAGE_ABOUT: "assets/images/about.svg",
+  },
+  loveseen: {
+    BUSINESS_NAME: "Atelier Nord", TAGLINE: "Qualität mit Handschlag", META_DESCRIPTION: "",
+    NAV_CTA: "Kontakt", NAV_LINK_1: "Über uns", NAV_LINK_2: "Leistungen", NAV_LINK_3: "Galerie", NAV_LINK_4: "Kontakt",
+    HERO_TITLE_LINE1: "Saubere Arbeit,", HERO_TITLE_LINE2: "starkes Finish", HERO_CTA: "Projekt anfragen",
+    SECTION_LABEL_ABOUT: "Über uns", ABOUT_HEADING_LINE1: "Eine klare Haltung", ABOUT_HEADING_LINE2: "für starke Resultate",
+    ABOUT_LEAD: "Wir verbinden Präzision, Verlässlichkeit und persönliche Beratung für Ergebnisse mit Bestand.",
+    ABOUT_DESCRIPTION: "Unser Team arbeitet strukturiert, termintreu und sauber bis ins Detail.", ABOUT_CTA: "Unsere Leistungen",
+    STATEMENT_LABEL: "Unser Versprechen", STATEMENT_LINE1: "Klare Planung,", STATEMENT_LINE2: "saubere Ausführung,", STATEMENT_LINE3: "spürbare Qualität.",
+    SECTION_LABEL_SERVICES: "Was wir tun", SERVICES_HEADING: "Unsere Leistungen",
+    SERVICE_1_TITLE: "Beratung", SERVICE_1_DESCRIPTION: "Transparentes Erstgespräch zu Anforderungen und Ablauf.",
+    SERVICE_2_TITLE: "Ausführung", SERVICE_2_DESCRIPTION: "Termintreue und präzise Umsetzung.",
+    SERVICE_3_TITLE: "Feinschliff", SERVICE_3_DESCRIPTION: "Kontrolle aller Details für ein sauberes Resultat.",
+    SERVICES_CTA: "Unverbindlich anfragen",
+    GALLERY_LABEL: "Einblicke", INSTAGRAM_HANDLE: "ateliernord", INSTAGRAM_URL: "#",
+    CONTACT_TAGLINE: "Schreiben oder rufen Sie uns an.", EMAIL_PLACEHOLDER: "Deine E-Mail-Adresse",
+    CONTACT_LABEL_PHONE: "Telefon", CONTACT_LABEL_EMAIL: "E-Mail", CONTACT_LABEL_ADDRESS: "Adresse", CONTACT_LABEL_HOURS: "Öffnungszeiten",
+    PHONE: "+41 44 123 45 67", EMAIL: "hallo@ateliernord.ch", ADDRESS: "Langstrasse 12, 8004 Zürich", OPENING_HOURS: "Di–Sa 9–18 Uhr",
+    FOOTER_PRIVACY: "Datenschutz", FOOTER_TERMS: "AGB", FOOTER_YEAR: "2026",
+    IMAGE_HERO: "assets/images/hero.svg", IMAGE_ABOUT: "assets/images/about.svg",
+    IMAGE_GALLERY_1: "assets/images/gallery1.svg", IMAGE_GALLERY_2: "assets/images/gallery2.svg", IMAGE_GALLERY_3: "assets/images/gallery3.svg",
+  },
+};
+
+// ── Pexels API Integration ──
+const THEME_QUERIES = {
+  "beauty-salon": ["beauty salon interior", "hair styling", "spa treatment", "cosmetics", "beauty professional"],
+  "wellness-fitness": ["yoga studio", "fitness gym", "wellness spa", "meditation", "personal training"],
+  "medical": ["medical clinic", "doctor office", "dental practice", "healthcare professional", "pharmacy"],
+  "construction-trade": ["construction work", "craftsman tools", "renovation", "painting wall", "building trade"],
+  "food-hospitality": ["restaurant interior", "cafe ambiance", "food preparation", "bakery", "cuisine"],
+  "tech-digital": ["modern office", "technology workspace", "digital business", "computer work", "startup"],
+  "professional-office": ["business meeting", "professional office", "consulting", "corporate team", "workspace"],
+  "local-service": ["local business", "service professional", "customer service", "store front", "workshop"],
+};
+
+function inferTheme(data) {
+  const cat = ((data.category || "") + " " + (data.BUSINESS_NAME || "")).toLowerCase();
+  if (/salon|coiffeur|friseur|beauty|kosmetik|nail|haar|hair|makeup|wimpern|lash/.test(cat)) return "beauty-salon";
+  if (/yoga|fitness|gym|sport|wellness|massage|physio/.test(cat)) return "wellness-fitness";
+  if (/arzt|praxis|dental|zahnarzt|doctor|klinik|clinic|apotheke|optik/.test(cat)) return "medical";
+  if (/bau|maler|painter|schreiner|elektr|sanit|dachdeck|gipser|plattenleger|renovier|handwerk|craft/.test(cat)) return "construction-trade";
+  if (/restaurant|café|cafe|bäckerei|bakery|gastro|catering|pizza|sushi|bar |bistro|küche/.test(cat)) return "food-hospitality";
+  if (/tech|software|web|digital|it |computer|agentur|design|market/.test(cat)) return "tech-digital";
+  if (/anwalt|lawyer|steuerber|treuhänd|notar|consult|beratung|versicher|immobilien/.test(cat)) return "professional-office";
+  return "local-service";
+}
+
+async function searchPexels(env, query, orientation = "landscape") {
+  const apiKey = env.PEXELS_API_KEY;
+  if (!apiKey) return [];
+  try {
+    const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&orientation=${orientation}&per_page=5`;
+    const resp = await fetch(url, { headers: { Authorization: apiKey } });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return (data.photos || []).map(p => p.src.large2x || p.src.large || p.src.original);
+  } catch (e) { console.error("Pexels error:", e); return []; }
+}
+
+async function suggestBusinessImages(env, data, slotMap) {
+  const theme = inferTheme(data);
+  const queries = THEME_QUERIES[theme] || THEME_QUERIES["local-service"];
+  const imageKeys = Object.keys(slotMap);
+  const result = {};
+  // Use the AI-determined category (English word) for more accurate Pexels results
+  const categoryTerm = data.category || data.BUSINESS_NAME || "";
+
+  // Search for images in parallel, one query per slot
+  // Use different query index offset per slot to get variety
+  const usedUrls = new Set();
+  const promises = imageKeys.map(async (key, i) => {
+    const slotDesc = slotMap[key] || queries[i % queries.length];
+    const searchQuery = categoryTerm + " " + slotDesc;
+    const urls = await searchPexels(env, searchQuery);
+    // Pick the first URL not already used by another slot (avoid duplicates)
+    for (const url of urls) {
+      if (!usedUrls.has(url)) {
+        result[key] = url;
+        usedUrls.add(url);
+        break;
+      }
+    }
+    // Fallback to first result if all were duplicates
+    if (!result[key] && urls.length > 0) {
+      result[key] = urls[0];
+    }
+  });
+
+  await Promise.all(promises);
+  return result;
+}
+
+// ── AI Text Enrichment via Claude Haiku ──
+async function enrichWithAI(env, data, templateKey) {
+  if (!env.ANTHROPIC_API_KEY) return {};
+  const name = data.BUSINESS_NAME || "";
+  const category = data.category || "";
+  const description = data._description || "";
+  const values = data._values || "";
+  const city = data.city || "";
+  // Skip AI if there's no meaningful input
+  if (!description && !values && !category && !name) return {};
+
+  const context = [
+    name ? `Firmenname: ${name}` : "",
+    category ? `Branche: ${category}` : "",
+    city ? `Standort: ${city}` : "",
+    description ? `Beschreibung vom Kunden: ${description}` : "",
+    values ? `Werte/Besonderheiten vom Kunden: ${values}` : "",
+  ].filter(Boolean).join("\n");
+
+  const prompt = `Du bist ein Webseiten-Texter für Schweizer KMU. Erstelle professionelle, authentische deutsche Texte für eine Firmenwebsite.
+
+Firma-Info:
+${context}
+
+Generiere ein JSON-Objekt mit diesen Feldern. Jeder Text soll einzigartig sein, zur Firma passen und NICHT einfach die Beschreibung wiederholen. Schreibe natürlich und professionell auf Deutsch (Schweizer Stil, kein ß).
+
+{
+  "TAGLINE": "kurzer Slogan, max 8 Wörter",
+  "HERO_TITLE_LINE1": "erste Zeile Haupttitel, 2-4 Wörter",
+  "HERO_TITLE_LINE2": "zweite Zeile Haupttitel, 2-4 Wörter",
+  "HERO_TITLE_LINE3": "dritte Zeile oder leer",
+  "HERO_DESCRIPTION": "1-2 Sätze, was die Firma bietet, max 150 Zeichen",
+  "ABOUT_HEADING": "Überschrift Über-uns-Bereich, 2-4 Wörter",
+  "ABOUT_LEAD": "1 Satz Einleitung zum Über-uns-Text, max 100 Zeichen",
+  "ABOUT_DESCRIPTION": "2-3 Sätze über die Firma, Werte und Arbeitsweise",
+  "INTRO_TEXT": "kurze Einleitung, 3-5 Wörter",
+  "INTRO_DESCRIPTION": "1 Satz Firmenbeschreibung, max 120 Zeichen",
+  "FEATURE_HEADING": "Überschrift Vorteile-Bereich, 2-4 Wörter",
+  "FEATURE_DESCRIPTION": "1 Satz warum diese Firma, max 100 Zeichen",
+  "FEATURE_POINT_1": "Vorteil 1, 2-3 Wörter",
+  "FEATURE_POINT_2": "Vorteil 2, 2-3 Wörter",
+  "FEATURE_POINT_3": "Vorteil 3, 2-3 Wörter",
+  "SERVICE_1_TITLE": "Leistung 1 Name",
+  "SERVICE_1_DESCRIPTION": "1 Satz zu Leistung 1",
+  "SERVICE_2_TITLE": "Leistung 2 Name",
+  "SERVICE_2_DESCRIPTION": "1 Satz zu Leistung 2",
+  "SERVICE_3_TITLE": "Leistung 3 Name",
+  "SERVICE_3_DESCRIPTION": "1 Satz zu Leistung 3",
+  "CTA_DESCRIPTION": "Handlungsaufforderung, 1 Satz",
+  "CTA_TITLE_LINE1": "CTA Titel Zeile 1, 2-3 Wörter",
+  "CTA_TITLE_LINE2": "CTA Titel Zeile 2, 2-3 Wörter",
+  "VALUE_1_TITLE": "Wert 1, 1-2 Wörter",
+  "VALUE_1_DESCRIPTION": "kurze Beschreibung Wert 1",
+  "VALUE_2_TITLE": "Wert 2, 1-2 Wörter",
+  "VALUE_2_DESCRIPTION": "kurze Beschreibung Wert 2",
+  "VALUE_3_TITLE": "Wert 3, 1-2 Wörter",
+  "VALUE_3_DESCRIPTION": "kurze Beschreibung Wert 3",
+  "STATEMENT_LINE1": "Statement Zeile 1, 2-4 Wörter",
+  "STATEMENT_LINE2": "Statement Zeile 2, 2-4 Wörter",
+  "STATEMENT_LINE3": "Statement Zeile 3, 2-4 Wörter",
+  "META_DESCRIPTION": "SEO-Beschreibung, max 155 Zeichen",
+  "CATEGORY": "Branche der Firma als ein Wort auf Englisch, z.B. painter, hairdresser, restaurant, fitness, dentist, lawyer, bakery, plumber, architect, photographer, florist — wähle das passendste"
+}
+
+Antworte NUR mit dem JSON-Objekt, kein anderer Text.`;
+
+  try {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 2000,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    if (!resp.ok) { console.error("AI enrichment failed:", resp.status); return {}; }
+    const result = await resp.json();
+    const text = (result.content || []).map(b => b.text || "").join("");
+    // Extract JSON from response (handle markdown code blocks)
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return {};
+    return JSON.parse(jsonMatch[0]);
+  } catch (e) { console.error("AI enrichment error:", e); return {}; }
+}
+
+// ── Merge lead data with template defaults + Pexels images ──
+async function mergeWithDefaults(env, templateKey, leadData) {
+  const defaults = TEMPLATE_DEFAULTS[templateKey] || {};
+  const merged = { ...defaults };
+
+  // Override defaults with lead data (non-empty values only)
+  // Skip _description and _values context fields — they're for AI only
+  for (const [key, value] of Object.entries(leadData)) {
+    if (key.startsWith("_")) continue;
+    if (value !== null && value !== undefined && value !== "") {
+      merged[key] = String(value);
+    }
+  }
+
+  // AI text enrichment — generates unique copy based on business info
+  // AI values override template defaults for ALL text fields
+  // Also returns CATEGORY which is used for Pexels image search
+  const aiText = await enrichWithAI(env, { ...merged, _description: leadData._description || "", _values: leadData._values || "" }, templateKey);
+  let aiCategory = "";
+  for (const [key, value] of Object.entries(aiText)) {
+    if (key === "CATEGORY") {
+      aiCategory = String(value);
+      continue; // Don't put CATEGORY into the HTML placeholders
+    }
+    if (value && !key.startsWith("IMAGE_")) {
+      merged[key] = String(value);
+    }
+  }
+  // Store AI category on merged so callers can write it back to the sheet
+  merged._aiCategory = aiCategory;
+
+  // Auto-generate META_DESCRIPTION if AI didn't provide one
+  if (!merged.META_DESCRIPTION) {
+    const name = merged.BUSINESS_NAME || "";
+    const tagline = merged.TAGLINE || "";
+    merged.META_DESCRIPTION = tagline ? `${name} — ${tagline}` : name;
+  }
+
+  // Fetch Pexels images for IMAGE_* slots not explicitly set by user uploads
+  // Skip Pexels when there's no real business context (e.g. step-2 fallback preview)
+  const hasBusinessContext = !!(leadData._description || leadData._values || leadData.category || (leadData.BUSINESS_NAME && leadData.BUSINESS_NAME !== ""));
+  const slotMap = IMAGE_SLOT_MAP[templateKey] || {};
+  if (hasBusinessContext) {
+    // Use AI-determined category for better Pexels results, fall back to lead data
+    if (aiCategory) merged.category = aiCategory;
+    const userProvidedImages = {};
+    for (const key of Object.keys(slotMap)) {
+      if (leadData[key] && !leadData[key].startsWith("assets/")) {
+        userProvidedImages[key] = true;
+      }
+    }
+    const autoImages = await suggestBusinessImages(env, merged, slotMap);
+    for (const [placeholder, imageUrl] of Object.entries(autoImages)) {
+      if (!userProvidedImages[placeholder]) {
+        merged[placeholder] = imageUrl;
+      }
+    }
+  }
+
+  return merged;
+}
+
+// ── Convert lead sheet data to placeholder data ──
+function leadToPlaceholderData(lead, customizations) {
+  const cust = customizations || {};
+  const data = {};
+
+  const name = lead.business_name || "";
+  if (name) {
+    data.BUSINESS_NAME = name;
+    data.BUSINESS_NAME_SHORT = name.split(/\s+/).slice(0, 2).join(" ");
+  }
+  if (lead.phone) { data.PHONE = lead.phone; data.PHONE_SHORT = lead.phone; }
+  const email = lead.owner_email || lead.emails || "";
+  if (email) data.EMAIL = email;
+  if (lead.address || lead.city) data.ADDRESS = lead.address || lead.city;
+  if (lead.category) data.category = lead.category;
+  if (lead.city) data.city = lead.city;
+
+  // Contact info from customizations (no-code users can provide these)
+  if (cust.phone) { data.PHONE = cust.phone; data.PHONE_SHORT = cust.phone; }
+  if (cust.address) data.ADDRESS = cust.address;
+
+  // Pass description + values as AI context — NOT as direct placeholder overrides.
+  // These are used by enrichWithAI() to generate proper unique text for each section.
+  if (cust.description) data._description = cust.description.trim();
+  if (cust.values) data._values = cust.values.trim();
+
+  return data;
+}
 
 async function generateAIImagePlacement(env, templateKey, imageFilenames, business) {
   if (!env.ANTHROPIC_API_KEY || !imageFilenames.length) return null;
@@ -355,6 +677,36 @@ async function handleRegister(request, env) {
   let accessToken;
   try { accessToken = await getAccessToken(env); } catch (e) { return jsonResp({ error: "Verbindungsfehler." }, 500); }
 
+  // Check if this email already has a lead (dedup)
+  try {
+    const sheetData = await getSheetValues(accessToken, env.LEADS_SHEET_ID);
+    const rows = sheetData.values || [];
+    const emailIdx = COLUMN_NAMES.indexOf("owner_email");
+    for (let i = 1; i < rows.length; i++) {
+      if ((rows[i][emailIdx] || "").trim().toLowerCase() === email) {
+        // Return existing lead instead of creating a duplicate
+        const existingLead = { _row_idx: i + 1 };
+        COLUMN_NAMES.forEach((name, j) => { existingLead[name] = rows[i][j] || ""; });
+        console.log("[register] Existing lead found for", email, "→", existingLead.lead_id);
+        return jsonResp({
+          lead_id: existingLead.lead_id,
+          business_name: existingLead.business_name,
+          category: existingLead.category,
+          city: existingLead.city,
+          phone: existingLead.phone,
+          owner_email: existingLead.owner_email,
+          owner_name: existingLead.owner_name,
+          address: existingLead.address,
+          status: existingLead.status,
+          previews: TEMPLATE_KEYS.map(t => `/api/preview/${existingLead.lead_id}/${t}`),
+          domains: [],
+          chosen_template: existingLead.chosen_template,
+          notes: existingLead.notes,
+        });
+      }
+    }
+  } catch (e) { console.error("Dedup check error:", e); }
+
   // Generate a 12-char hex lead_id from email + timestamp
   const encoder = new TextEncoder();
   const data = encoder.encode(email + Date.now().toString());
@@ -362,20 +714,27 @@ async function handleRegister(request, env) {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const leadId = hashArray.map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 12);
 
-  // Create a new row in the sheet with minimal data
+  // Build row explicitly — only set known fields, everything else stays empty
   const now = new Date().toISOString();
-  const row = new Array(COLUMN_NAMES.length).fill("");
-  row[COLUMN_NAMES.indexOf("lead_id")] = leadId;
-  row[COLUMN_NAMES.indexOf("scraped_at")] = now;
-  row[COLUMN_NAMES.indexOf("owner_email")] = email;
-  row[COLUMN_NAMES.indexOf("emails")] = email;
-  row[COLUMN_NAMES.indexOf("status")] = "registered_no_code";
-  row[COLUMN_NAMES.indexOf("acquisition_source")] = "organic";
+  const row = [];
+  for (let i = 0; i < COLUMN_NAMES.length; i++) {
+    switch (COLUMN_NAMES[i]) {
+      case "lead_id":            row.push(leadId); break;
+      case "scraped_at":         row.push(now); break;
+      case "owner_email":        row.push(email); break;
+      case "emails":             row.push(email); break;
+      case "status":             row.push("registered_no_code"); break;
+      case "acquisition_source": row.push("organic"); break;
+      default:                   row.push(""); break;
+    }
+  }
+
+  console.log("[register] New lead:", leadId, "email:", email, "row length:", row.length,
+    "non-empty cells:", row.filter(v => v !== "").length);
 
   try { await appendRow(accessToken, env.LEADS_SHEET_ID, row); }
   catch (e) { console.error("Append error:", e); return jsonResp({ error: "Registrierung fehlgeschlagen." }, 500); }
 
-  // Return minimal lead data (no previews, no domains — those come later)
   return jsonResp({
     lead_id: leadId,
     business_name: "",
@@ -409,12 +768,18 @@ async function handleUpdateLead(leadId, request, env) {
   if (body.business_name) updates.business_name = body.business_name;
   if (body.description || body.values) {
     const existingNotes = lead.notes ? (function() { try { return JSON.parse(lead.notes); } catch { return {}; } })() : {};
-    existingNotes.description = body.description || "";
-    existingNotes.values = body.values || "";
+    if (body.description) existingNotes.description = body.description;
+    if (body.values) existingNotes.values = body.values;
     updates.notes = JSON.stringify(existingNotes);
   }
   if (body.category) updates.category = body.category;
   if (body.city) updates.city = body.city;
+  if (body.phone) updates.phone = body.phone;
+  if (body.address) updates.address = body.address;
+  if (body.chosen_template) updates.chosen_template = body.chosen_template;
+  if (body.domain_option_1) updates.domain_option_1 = body.domain_option_1;
+  if (body.domain_option_2) updates.domain_option_2 = body.domain_option_2;
+  if (body.domain_option_3) updates.domain_option_3 = body.domain_option_3;
 
   if (Object.keys(updates).length > 0) {
     try { await updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, updates); }
@@ -434,6 +799,7 @@ async function handleOrder(leadId, request, env) {
   const fd = await request.formData();
   const chosenTemplate = fd.get("chosen_template")||"", description = fd.get("description")||"";
   const values = fd.get("values")||"", selectedDomain = fd.get("selected_domain")||"";
+  const phone = fd.get("phone")||"", address = fd.get("address")||"";
   if (fd.get("agreed_to_terms") !== "true") return jsonResp({ error: "AGB müssen akzeptiert werden." }, 400);
   if (!chosenTemplate) return jsonResp({ error: "Kein Template gewählt." }, 400);
 
@@ -451,13 +817,21 @@ async function handleOrder(leadId, request, env) {
     }
   } catch (e) { console.error("Drive error:", e); }
 
-  // 2. Generate the final website HTML (same as preview)
+  // 2. Use cached preview HTML if available, otherwise regenerate
   let finalHtml = null;
   let liveUrl = "";
   let projectName = "";
-  try {
-    finalHtml = await generateFinalHTML(env, request.url, chosenTemplate, leadId, description, values, logo, images);
-  } catch (e) { console.error("HTML generation error:", e); }
+  const cached = previewCache.get(leadId);
+  if (cached && cached.template === chosenTemplate && (Date.now() - cached.timestamp) < PREVIEW_CACHE_TTL) {
+    finalHtml = cached.html;
+    previewCache.delete(leadId);
+    console.log("Using cached preview HTML for", leadId);
+  } else {
+    try {
+      const result = await generateFinalHTML(env, request.url, chosenTemplate, leadId, description, values, logo, images, phone, address);
+      finalHtml = result.html;
+    } catch (e) { console.error("HTML generation error:", e); }
+  }
 
   // 3. Deploy to Cloudflare Pages
   if (finalHtml && env.CF_API_TOKEN && env.CF_ACCOUNT_ID) {
@@ -494,6 +868,8 @@ async function handleOrder(leadId, request, env) {
   };
   if (selectedDomain) updates.domain_option_1 = selectedDomain;
   if (liveUrl) updates.website_url = liveUrl;
+  if (phone) updates.phone = phone;
+  if (address) updates.address = address;
   try { await updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, updates); }
   catch (e) { console.error("Sheet update error:", e); }
 
@@ -503,8 +879,9 @@ async function handleOrder(leadId, request, env) {
 async function handlePreview(leadId, templateKey, request, env) {
   if (!TEMPLATE_KEYS.includes(templateKey)) return new Response("Template not found", { status: 404 });
   const templateDir = `templates/${templateKey}`;
-  // Fetch template HTML from static assets via ASSETS binding
-  const assetUrl = new URL(`/${templateDir}/index.html`, request.url);
+  // Use raw templates (with {{PLACEHOLDER}} patterns) for runtime filling
+  const rawDir = `templates-raw/${templateKey}`;
+  const assetUrl = new URL(`/${rawDir}/index.html`, request.url);
   const templateResp = await env.ASSETS.fetch(new Request(assetUrl));
   if (!templateResp.ok) return new Response("Template HTML not found", { status: 404 });
   let html = await templateResp.text();
@@ -517,16 +894,28 @@ async function handlePreview(leadId, templateKey, request, env) {
   } catch (e) { console.error("Preview error:", e); }
 
   const url = new URL(request.url);
-  if (lead) {
-    const cust = { description: url.searchParams.get("description")||"", values: url.searchParams.get("values")||"" };
-    let replacements = (cust.description || cust.values) ? await generateAIContent(env, lead, templateKey, cust) : null;
-    if (!replacements) replacements = buildFallbackReplacements(lead, cust);
-    for (const [key, value] of Object.entries(replacements)) html = html.replaceAll(`{{${key}}}`, value);
-  }
+  const cust = {
+    description: url.searchParams.get("description") || "",
+    values: url.searchParams.get("values") || "",
+    phone: url.searchParams.get("phone") || "",
+    address: url.searchParams.get("address") || "",
+  };
+  // Build placeholder data — works with or without a lead record
+  const fakeLead = { business_name: url.searchParams.get("business_name") || "" };
+  const placeholderData = leadToPlaceholderData(lead || fakeLead, cust);
+
+  // Merge with template defaults + Pexels images
+  const merged = await mergeWithDefaults(env, templateKey, placeholderData);
+
+  for (const [key, value] of Object.entries(merged)) html = html.replaceAll(`{{${key}}}`, value);
   html = html.replace(/\{\{[A-Z_0-9]+\}\}/g, "");
-  const basePath = `/${templateDir}/`;
-  html = html.replaceAll('src="assets/', `src="${basePath}assets/`).replaceAll("src='assets/", `src='${basePath}assets/`)
-    .replaceAll('href="assets/', `href="${basePath}assets/`).replaceAll('href="style', `href="${basePath}style`).replaceAll('href="./style', `href="${basePath}style`);
+
+  // Fix CSS path
+  html = html.replaceAll('href="styles.css"', `href="/${templateDir}/styles.css"`);
+  html = html.replaceAll('href="./styles.css"', `href="/${templateDir}/styles.css"`);
+
+  // Fix relative image paths (for fallback SVG/JPG assets when Pexels didn't fill them)
+  html = html.replace(/src="assets\//g, `src="/${templateDir}/assets/`);
 
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
 }
@@ -545,17 +934,19 @@ function arrayBufferToBase64(buffer) {
 }
 
 // ── Generate Final HTML (shared between preview + order) ──
-async function generateFinalHTML(env, requestUrl, templateKey, leadId, description, values, logoFile, imageFiles) {
+// Uses new generation pipeline: template defaults + Pexels images + placeholder fill
+async function generateFinalHTML(env, requestUrl, templateKey, leadId, description, values, logoFile, imageFiles, phone, address) {
   if (!TEMPLATE_KEYS.includes(templateKey)) throw new Error("Template not found: " + templateKey);
 
-  // 1. Get template HTML
+  // 1. Get template HTML (use raw templates with {{PLACEHOLDER}} patterns)
   const templateDir = `templates/${templateKey}`;
-  const assetUrl = new URL(`/${templateDir}/index.html`, requestUrl);
+  const rawDir = `templates-raw/${templateKey}`;
+  const assetUrl = new URL(`/${rawDir}/index.html`, requestUrl);
   const templateResp = await env.ASSETS.fetch(new Request(assetUrl));
   if (!templateResp.ok) throw new Error("Template HTML not found");
   let html = await templateResp.text();
 
-  // 2. Get lead data and generate AI text content
+  // 2. Get lead data
   let lead = null;
   try {
     const accessToken = await getAccessToken(env);
@@ -563,31 +954,45 @@ async function generateFinalHTML(env, requestUrl, templateKey, leadId, descripti
     lead = findLead(sheetData, leadId);
   } catch (e) { console.error("Lead lookup error:", e); }
 
-  if (lead) {
-    const cust = { description, values };
-    let replacements = (description || values) ? await generateAIContent(env, lead, templateKey, cust) : null;
-    if (!replacements) replacements = buildFallbackReplacements(lead, cust);
-    for (const [key, value] of Object.entries(replacements)) html = html.replaceAll(`{{${key}}}`, value);
-  }
-  html = html.replace(/\{\{[A-Z_0-9]+\}\}/g, "");
+  // 3. Build placeholder data from lead + anpassen customizations
+  const cust = { description, values, phone: phone || "", address: address || "" };
+  const placeholderData = leadToPlaceholderData(lead || { business_name: "" }, cust);
 
-  // Fix asset paths for preview (relative → absolute)
-  const basePath = `/${templateDir}/`;
-  html = html.replaceAll('src="assets/', `src="${basePath}assets/`).replaceAll("src='assets/", `src='${basePath}assets/`)
-    .replaceAll('href="assets/', `href="${basePath}assets/`).replaceAll('href="style', `href="${basePath}style`).replaceAll('href="./style', `href="${basePath}style`);
-
-  // 3. Process uploaded images
+  // 4. Process uploaded images — convert to data URLs for override
   const images = (imageFiles || []).filter(f => f && f.size > 0);
   const imageDataUrls = [];
-  const imageFilenames = [];
   for (const img of images) {
     const buf = await img.arrayBuffer();
     const b64 = arrayBufferToBase64(buf);
     imageDataUrls.push(`data:${img.type || "image/png"};base64,${b64}`);
-    imageFilenames.push(img.name || `image_${imageDataUrls.length}`);
   }
 
-  // 4. Inject logo
+  // Override IMAGE_* placeholders with uploaded images
+  if (imageDataUrls.length > 0) {
+    const slotMap = IMAGE_SLOT_MAP[templateKey] || {};
+    const imageKeys = Object.keys(slotMap);
+    imageDataUrls.forEach((dataUrl, i) => {
+      if (i < imageKeys.length) placeholderData[imageKeys[i]] = dataUrl;
+    });
+  }
+
+  // 5. Merge with template defaults + fetch Pexels images for unfilled slots
+  const merged = await mergeWithDefaults(env, templateKey, placeholderData);
+  const aiCategory = merged._aiCategory || "";
+  delete merged._aiCategory;
+
+  // 6. Replace all {{PLACEHOLDER}} patterns in HTML
+  for (const [key, value] of Object.entries(merged)) {
+    html = html.replaceAll(`{{${key}}}`, value);
+  }
+  html = html.replace(/\{\{[A-Z_0-9]+\}\}/g, "");
+
+  // 7. Fix CSS + relative image paths
+  html = html.replaceAll('href="styles.css"', `href="/${templateDir}/styles.css"`);
+  html = html.replaceAll('href="./styles.css"', `href="/${templateDir}/styles.css"`);
+  html = html.replace(/src="assets\//g, `src="/${templateDir}/assets/`);
+
+  // 8. Inject logo
   if (logoFile && logoFile.size > 0) {
     const logoBuf = await logoFile.arrayBuffer();
     const logoB64 = arrayBufferToBase64(logoBuf);
@@ -598,47 +1003,8 @@ async function generateFinalHTML(env, requestUrl, templateKey, leadId, descripti
     html = html.replace(/(<(?:a|div|span)[^>]*class="[^"]*(?:contact-logo|footer-logo(?:-text)?)[^"]*"[^>]*>)([\s\S]*?)(<\/(?:a|div|span)>)/i, `$1${footerLogoTag}$3`);
   }
 
-  // 5. AI image placement
-  if (imageDataUrls.length > 0) {
-    const slots = TEMPLATE_IMAGE_SLOTS[templateKey] || [];
-    let placement = null;
-    const businessName = (lead && lead.business_name) || "Business";
-    placement = await generateAIImagePlacement(env, templateKey, imageFilenames, businessName);
-
-    // Validate: no image used twice
-    if (placement) {
-      const usedIndices = new Set();
-      const cleanPlacement = {};
-      for (const [slot, idx] of Object.entries(placement)) {
-        if (typeof idx === "number" && idx >= 0 && idx < imageDataUrls.length && !usedIndices.has(idx)) {
-          cleanPlacement[slot] = idx;
-          usedIndices.add(idx);
-        }
-      }
-      placement = cleanPlacement;
-    }
-
-    // Fallback: sequential
-    if (!placement || Object.keys(placement).length === 0) {
-      placement = {};
-      for (let i = 0; i < Math.min(imageDataUrls.length, slots.length); i++) {
-        placement[slots[i].slot] = i;
-      }
-    }
-
-    // Apply placement
-    for (const slotDef of slots) {
-      const imgIdx = placement[slotDef.slot];
-      if (imgIdx === undefined || imgIdx === null || !imageDataUrls[imgIdx]) continue;
-      const fileBase = slotDef.file.replace(/\.[^.]+$/, "");
-      const fileExt = slotDef.file.split(".").pop();
-      const srcPattern = new RegExp(`src="${basePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}assets/images/${fileBase}\\.${fileExt}"`, "g");
-      html = html.replace(srcPattern, `src="${imageDataUrls[imgIdx]}" style="object-fit:cover;width:100%;height:100%;"`);
-    }
-  }
-
-  // 6. Inline the CSS so the deployed HTML is fully self-contained
-  const cssUrl = new URL(`/${templateDir}/style.css`, requestUrl);
+  // 9. Inline the CSS so the deployed HTML is fully self-contained
+  const cssUrl = new URL(`/${templateDir}/styles.css`, requestUrl);
   try {
     const cssResp = await env.ASSETS.fetch(new Request(cssUrl));
     if (cssResp.ok) {
@@ -647,21 +1013,45 @@ async function generateFinalHTML(env, requestUrl, templateKey, leadId, descripti
     }
   } catch (e) { console.error("CSS inline failed:", e); }
 
-  return html;
+  return { html, aiCategory };
 }
 
 async function handlePreviewWithImages(request, env) {
   try {
     const fd = await request.formData();
-    const html = await generateFinalHTML(
-      env, request.url,
-      fd.get("template") || "",
-      fd.get("lead_id") || "",
-      fd.get("description") || "",
-      fd.get("values") || "",
-      fd.get("logo"),
-      fd.getAll("images")
+    const leadId = fd.get("lead_id") || "";
+    const templateKey = fd.get("template") || "";
+    const description = fd.get("description") || "";
+    const values = fd.get("values") || "";
+    const phone = fd.get("phone") || "";
+    const address = fd.get("address") || "";
+    const result = await generateFinalHTML(
+      env, request.url, templateKey, leadId, description, values,
+      fd.get("logo"), fd.getAll("images"), phone, address
     );
+    const html = result.html;
+    const aiCategory = result.aiCategory;
+
+    // Cache the generated HTML so the order endpoint can reuse it
+    if (leadId) {
+      previewCache.set(leadId, { html, template: templateKey, timestamp: Date.now() });
+    }
+
+    // Write AI-detected category back to the sheet (fire-and-forget, don't block preview)
+    if (leadId && aiCategory) {
+      (async () => {
+        try {
+          const accessToken = await getAccessToken(env);
+          const sheetData = await getSheetValues(accessToken, env.LEADS_SHEET_ID);
+          const lead = findLead(sheetData, leadId);
+          if (lead && !lead.category) {
+            await updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, { category: aiCategory });
+            console.log("[preview] Set category for", leadId, ":", aiCategory);
+          }
+        } catch (e) { console.error("[preview] Sheet writeback error:", e); }
+      })();
+    }
+
     return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
   } catch (e) {
     console.error("Preview with images error:", e);
@@ -738,6 +1128,49 @@ function emailFooter() {
       <a href="https://meine-kmu.ch" style="color:#888;">meine-kmu.ch</a>
     </p>
   </div>`;
+}
+
+// ── Domain availability check via RDAP / DNS ─────────────
+async function checkDomainAvailability(domain) {
+  const tld = domain.rsplit ? domain.split(".").pop() : domain.split(".").pop();
+  if (tld === "ch") {
+    // .ch domains: use RDAP (nic.ch)
+    try {
+      const resp = await fetch(`https://rdap.nic.ch/domain/${domain}`, { redirect: "follow" });
+      if (resp.status === 404) return { domain, available: true, tld: "." + tld };
+      if (resp.status === 200) return { domain, available: false, tld: "." + tld };
+    } catch (e) { /* fall through to DNS */ }
+  } else if (tld === "com") {
+    // .com domains: use RDAP (verisign)
+    try {
+      const resp = await fetch(`https://rdap.verisign.com/com/v1/domain/${domain}`, { redirect: "follow" });
+      if (resp.status === 404) return { domain, available: true, tld: "." + tld };
+      if (resp.status === 200) return { domain, available: false, tld: "." + tld };
+    } catch (e) { /* fall through to DNS */ }
+  }
+  // Fallback: DNS resolution check via Cloudflare DoH
+  try {
+    const resp = await fetch(`https://cloudflare-dns.com/dns-query?name=${domain}&type=A`, {
+      headers: { "Accept": "application/dns-json" },
+    });
+    const data = await resp.json();
+    const hasRecords = data.Answer && data.Answer.length > 0;
+    return { domain, available: !hasRecords, tld: "." + tld };
+  } catch (e) {
+    return { domain, available: null, tld: "." + tld }; // unknown
+  }
+}
+
+async function handleCheckDomains(request) {
+  let body;
+  try { body = await request.json(); } catch { return jsonResp({ error: "Invalid request" }, 400); }
+  const domains = body.domains;
+  if (!Array.isArray(domains) || domains.length === 0) return jsonResp({ error: "No domains provided" }, 400);
+
+  // Check all domains in parallel (max 10)
+  const toCheck = domains.slice(0, 10);
+  const results = await Promise.all(toCheck.map(d => checkDomainAvailability(d)));
+  return jsonResp({ results });
 }
 
 function domainPurchaseLink(domain, existingLink) {
@@ -887,6 +1320,10 @@ export default {
         // POST /api/preview-with-images — full preview with AI image placement
         if (path === "/api/preview-with-images" && request.method === "POST")
           return handlePreviewWithImages(request, env);
+
+        // POST /api/check-domains — check domain availability via RDAP/DNS
+        if (path === "/api/check-domains" && request.method === "POST")
+          return handleCheckDomains(request);
 
         return jsonResp({ error: "Not found" }, 404);
       } catch (e) {

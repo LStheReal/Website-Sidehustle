@@ -60,6 +60,12 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8091", "--directory", "cf-dashboard"],
       "port": 8091
+    },
+    {
+      "name": "website-builder",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8092"],
+      "port": 8092
     }
   ]
 }

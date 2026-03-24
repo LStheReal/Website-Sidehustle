@@ -62,9 +62,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from execution.website_utils import copy_template, fill_directory, validate_output
+from execution.business_images import suggest_business_images
+from execution.copy_enrichment import enrich_template_copy
+from execution.website_storage import get_design_output_dir
 
 # Path to the template directory (relative to this script)
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "template"
+TEMPLATE_KEY = "bia"
 
 # All supported placeholders with their default fallback values
 PLACEHOLDER_DEFAULTS = {
@@ -104,6 +108,17 @@ PLACEHOLDER_DEFAULTS = {
     "EMAIL": "",
     "ADDRESS": "",
     "OPENING_HOURS": "Mo–Fr 08:00–18:00",
+    "IMAGE_HERO": "assets/images/hero.svg",
+    "IMAGE_SHOWCASE": "assets/images/showcase.svg",
+    "IMAGE_CTA": "assets/images/cta.svg",
+    "IMAGE_CONTACT": "assets/images/contact.svg",
+}
+
+IMAGE_SLOT_MAP = {
+    "IMAGE_HERO": "hero",
+    "IMAGE_SHOWCASE": "showcase",
+    "IMAGE_CTA": "cta",
+    "IMAGE_CONTACT": "contact",
 }
 
 
@@ -142,6 +157,13 @@ def merge_with_defaults(data: dict) -> dict:
             merged["META_DESCRIPTION"] = f"{name} — {tagline}"
         elif name:
             merged["META_DESCRIPTION"] = name
+    merged = enrich_template_copy(merged, "bia")
+
+    merged.setdefault("TEMPLATE_NAME", "bia")
+    auto_images = suggest_business_images(merged, IMAGE_SLOT_MAP)
+    for placeholder, image_url in auto_images.items():
+        if not data.get(placeholder):
+            merged[placeholder] = image_url
 
     return merged
 
@@ -213,7 +235,6 @@ def main():
     )
     parser.add_argument(
         "--output", "-o",
-        required=True,
         help="Output directory for the generated website."
     )
     parser.add_argument(
@@ -242,7 +263,12 @@ def main():
             sys.exit(1)
 
     # Generate the website
-    result = generate_website(data, args.output, overwrite=args.overwrite)
+    output_dir = args.output
+    if not output_dir:
+        output_dir = str(get_design_output_dir(PROJECT_ROOT, data.get("BUSINESS_NAME", ""), TEMPLATE_KEY))
+        print(f"No --output provided. Using default: {output_dir}")
+
+    result = generate_website(data, output_dir, overwrite=args.overwrite)
 
     # Summary
     print(f"\nWebsite generated at: {result['output_dir']}")

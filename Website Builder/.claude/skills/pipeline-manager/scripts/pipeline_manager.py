@@ -53,6 +53,8 @@ from generate_cold_email import (
     generate_day7_email,
     generate_day14_email,
     get_screenshot_url,
+    send_email,
+    capture_screenshot_bytes,
 )
 
 # Call assistant
@@ -1005,10 +1007,70 @@ def action_report(worksheet, sheet_title: str) -> dict:
     else:
         print(f"\n  No action items — all leads are complete or waiting.")
 
+    # === Operational Summary: What You Need To Buy / Do ===
+    paid_no_domain = [
+        l for l in leads
+        if l.get("status", "").strip().lower() in ("sold", "website_creating")
+        and not l.get("custom_domain", "").strip()
+    ]
+    unanswered = [
+        l for l in leads
+        if l.get("status", "").strip().lower() == "email_sent"
+    ]
+    emails_out_total = len([
+        l for l in leads
+        if l.get("email_sent_date", "").strip()
+    ])
+    responded_leads = [
+        l for l in leads
+        if l.get("status", "").strip().lower() == "responded"
+    ]
+    sold_leads = [
+        l for l in leads
+        if l.get("status", "").strip().lower() == "sold"
+    ]
+
+    print(f"\n{'='*60}")
+    print(f"  Operational Summary")
+    print(f"{'='*60}")
+    print(f"  Cold emails sent (total):     {emails_out_total}")
+    print(f"  Awaiting response:            {len(unanswered)}")
+    print(f"  Responded (need onboarding):  {len(responded_leads)}")
+    print(f"  Sold / active customers:      {len(sold_leads)}")
+
+    if paid_no_domain:
+        print(f"\n  *** DOMAINS TO BUY ({len(paid_no_domain)}): ***")
+        for l in paid_no_domain:
+            biz = l.get("business_name", "?")
+            suggested = l.get("suggested_domain", l.get("domain_1", "no domain suggested"))
+            print(f"    - {biz}: buy {suggested}")
+
+    if responded_leads:
+        print(f"\n  *** NEEDS YOUR ATTENTION ({len(responded_leads)}): ***")
+        for l in responded_leads:
+            biz = l.get("business_name", "?")
+            print(f"    - {biz}: responded — start onboarding call")
+
+    # Conversion funnel
+    total = len(leads)
+    if total > 0:
+        print(f"\n  Conversion Funnel:")
+        print(f"    Leads:           {total}")
+        print(f"    Emails sent:     {emails_out_total}  ({emails_out_total*100//total}%)")
+        print(f"    Responded:       {len(responded_leads)}  ({len(responded_leads)*100//max(emails_out_total,1)}% of emails)")
+        print(f"    Sold:            {len(sold_leads)}  ({len(sold_leads)*100//max(len(responded_leads),1)}% of responded)")
+
+    print(f"\n{'='*60}")
+
     return {
         "total_leads": len(leads),
         "status_counts": dict(status_counts),
         "actions": actions,
+        "emails_out": emails_out_total,
+        "unanswered": len(unanswered),
+        "responded": len(responded_leads),
+        "sold": len(sold_leads),
+        "domains_to_buy": [l.get("business_name", "?") for l in paid_no_domain],
     }
 
 
@@ -1096,17 +1158,191 @@ def action_process_one(worksheet, lead_id: str, sender_info: dict) -> dict:
     return {"found": True, "lead_id": lead_id, "business": biz, "actions": actions}
 
 
+def action_send_emails(worksheet, sender_info: dict, sheet_title: str, count: int) -> dict:
+    """Send cold emails to leads with deployed websites. Auto-processes new leads if needed."""
+    leads = read_all_leads(worksheet)
+
+    if not leads:
+        print("\n  No leads found in sheet.")
+        return {"sent": 0, "processed_new": 0, "errors": []}
+
+    # Step 1: Find leads ready for email (website_created + has email + has draft URLs)
+    ready_leads = [
+        l for l in leads
+        if l.get("status", "").strip().lower() == "website_created"
+        and l.get("owner_email", "").strip()
+        and any(l.get(f"draft_url_{i}", "") for i in range(1, 5))
+    ]
+
+    # Step 2: If not enough, find 'new' leads we can process first
+    new_leads = [
+        l for l in leads
+        if l.get("status", "").strip().lower() == "new"
+        and l.get("owner_email", "").strip()
+    ]
+
+    available = len(ready_leads)
+    need_more = max(0, count - available)
+    new_to_process = new_leads[:need_more] if need_more > 0 else []
+
+    print(f"\n{'='*60}")
+    print(f"  Send Cold Emails")
+    print(f"  Sheet: {sheet_title}")
+    print(f"  Requested: {count}")
+    print(f"  Ready to send: {available}")
+    if new_to_process:
+        print(f"  New leads to process first: {len(new_to_process)}")
+    print(f"{'='*60}")
+
+    # Step 3: Process new leads first (build + deploy websites)
+    processed_new = 0
+    for lead in new_to_process:
+        biz = lead.get("business_name", "?")
+        print(f"\n  Processing NEW lead: {biz}...")
+        try:
+            process_new(lead, worksheet, sender_info)
+            processed_new += 1
+        except Exception as e:
+            print(f"  ERROR processing {biz}: {e}")
+
+    # Re-read all leads after processing new ones
+    if processed_new > 0:
+        leads = read_all_leads(worksheet)
+        ready_leads = [
+            l for l in leads
+            if l.get("status", "").strip().lower() == "website_created"
+            and l.get("owner_email", "").strip()
+            and any(l.get(f"draft_url_{i}", "") for i in range(1, 5))
+        ]
+
+    # Step 4: Send emails
+    sent = 0
+    errors = []
+    send_list = ready_leads[:count]
+
+    print(f"\n  Sending {len(send_list)} emails...")
+
+    for lead in send_list:
+        biz = lead.get("business_name", "?")
+        lead_id = lead.get("lead_id", "")
+        owner_email = lead.get("owner_email", "").strip()
+        owner_name = lead.get("owner_name", "").strip()
+        row_idx = lead["_row_idx"]
+
+        url1 = lead.get("draft_url_1", "")
+        url2 = lead.get("draft_url_2", "")
+        url3 = lead.get("draft_url_3", "")
+        url4 = lead.get("draft_url_4", "") or url3 or url2 or url1
+
+        if not any([url1, url2, url3, url4]):
+            errors.append(f"{biz}: No draft URLs")
+            continue
+
+        try:
+            # Generate email
+            ss1 = get_screenshot_url(url1)
+            ss2 = get_screenshot_url(url2)
+            ss3 = get_screenshot_url(url3)
+            ss4 = get_screenshot_url(url4)
+
+            email = generate_day0_email(
+                business_name=biz,
+                owner_name=owner_name,
+                url1=url1, url2=url2, url3=url3, url4=url4,
+                ss1=ss1, ss2=ss2, ss3=ss3, ss4=ss4,
+                lead_id=lead_id,
+                sender_name=sender_info["name"],
+                sender_phone=sender_info["phone"],
+                sender_email=sender_info["email"],
+            )
+
+            # Capture screenshots for inline images
+            print(f"  [{sent+1}/{len(send_list)}] {biz} -> {owner_email}")
+            screenshot_urls = [url1, url2, url3, url4]
+            cids = ["ss1", "ss2", "ss3", "ss4"]
+            inline_images = []
+            for url, cid in zip(screenshot_urls, cids):
+                if url:
+                    try:
+                        png_bytes = capture_screenshot_bytes(url)
+                        inline_images.append((png_bytes, cid))
+                    except Exception as e:
+                        print(f"    Warning: Screenshot failed for {url}: {e}")
+
+            # Send via SMTP
+            send_email(
+                to_email=owner_email,
+                subject=email["subject"],
+                body_text=email["body"],
+                body_html=email["body_html"],
+                from_name=sender_info["name"],
+                from_email=sender_info["email"],
+                inline_images=inline_images,
+            )
+
+            # Update sheet
+            update_cells(worksheet, row_idx, {
+                "status": "email_sent",
+                "email_sent_date": datetime.now().strftime("%Y-%m-%d"),
+                "next_action": "WAIT FOR RESPONSE",
+                "next_action_date": (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d"),
+            })
+
+            # Save email to .tmp for records
+            email_result = {
+                "generated_at": datetime.now().isoformat(),
+                "sent": True,
+                "recipient": {"business_name": biz, "owner_email": owner_email},
+                "emails": [email],
+            }
+            save_intermediate(email_result, f"sent_email_{lead_id}")
+
+            sent += 1
+            print(f"    Sent + sheet updated")
+
+        except Exception as e:
+            errors.append(f"{biz}: {e}")
+            print(f"    ERROR: {e}")
+
+    # Summary
+    print(f"\n{'='*60}")
+    print(f"  Send Emails Complete")
+    print(f"{'='*60}")
+    print(f"  Sent: {sent}/{count} requested")
+    if processed_new:
+        print(f"  New leads processed: {processed_new}")
+    if errors:
+        print(f"  Errors: {len(errors)}")
+        for err in errors:
+            print(f"    - {err}")
+
+    remaining = len([
+        l for l in leads
+        if l.get("status", "").strip().lower() in ("new", "website_created")
+        and l.get("owner_email", "").strip()
+    ]) - sent
+    print(f"  Leads remaining (new + website_created with email): {max(0, remaining)}")
+
+    return {
+        "sent": sent,
+        "processed_new": processed_new,
+        "errors": errors,
+        "requested": count,
+    }
+
+
 # --- Main ---
 
 def main():
     parser = argparse.ArgumentParser(description="Pipeline Manager — Orchestrate the Website Builder pipeline")
     parser.add_argument("--sheet-url", help="Google Sheet URL with leads (default: LEADS_SHEET_URL from .env)")
-    parser.add_argument("--action", required=True, choices=["report", "process", "process-one"],
+    parser.add_argument("--action", required=True, choices=["report", "process", "process-one", "send-emails"],
                         help="Action to perform")
     parser.add_argument("--lead-id", help="Lead ID (required for process-one)")
     parser.add_argument("--sender-name", help="Your name (required for process/process-one)")
     parser.add_argument("--sender-phone", help="Your phone (required for process/process-one)")
-    parser.add_argument("--sender-email", help="Your email (required for process/process-one)")
+    parser.add_argument("--sender-email", help="Your email (required for process/process-one/send-emails)")
+    parser.add_argument("--count", type=int, default=10, help="Number of emails to send (for send-emails action)")
     args = parser.parse_args()
 
     # Resolve sheet URL: explicit arg > .env canonical > error
@@ -1117,9 +1353,9 @@ def main():
         print(f"Using canonical sheet from .env: {CANONICAL_SHEET_URL}")
 
     # Validate args
-    if args.action in ("process", "process-one"):
+    if args.action in ("process", "process-one", "send-emails"):
         if not all([args.sender_name, args.sender_phone, args.sender_email]):
-            parser.error("--sender-name, --sender-phone, and --sender-email are required for process/process-one")
+            parser.error("--sender-name, --sender-phone, and --sender-email are required for process/process-one/send-emails")
 
     if args.action == "process-one" and not args.lead_id:
         parser.error("--lead-id is required for process-one")
@@ -1141,6 +1377,8 @@ def main():
         result = action_report(worksheet, sheet_title)
     elif args.action == "process":
         result = action_process(worksheet, sender_info, sheet_title)
+    elif args.action == "send-emails":
+        result = action_send_emails(worksheet, sender_info, sheet_title, args.count)
     elif args.action == "process-one":
         result = action_process_one(worksheet, args.lead_id, sender_info)
 

@@ -43,13 +43,32 @@ python3 .claude/skills/pipeline-manager/scripts/pipeline_manager.py \
   --action process-one
 ```
 
+### Send Cold Emails — Batch send emails to leads
+```bash
+source .venv/bin/activate
+python3 .claude/skills/pipeline-manager/scripts/pipeline_manager.py \
+  --sheet-url "https://docs.google.com/spreadsheets/d/..." \
+  --sender-name "Luise Schule" \
+  --sender-phone "+41 79 123 45 67" \
+  --sender-email "info@meine-kmu.ch" \
+  --action send-emails \
+  --count 100
+```
+
+This will:
+1. First use leads with status `website_created` (websites built, email ready)
+2. If not enough, auto-process `new` leads (build websites, deploy) to fill the count
+3. Send Day 0 cold emails via SMTP
+4. Update sheet status to `email_sent` with date
+
 ### Parameters
 - `--sheet-url` (required) — Google Sheet URL with leads
-- `--action` (required) — One of: `report`, `process`, `process-one`
+- `--action` (required) — One of: `report`, `process`, `process-one`, `send-emails`
 - `--lead-id` (required for process-one) — Lead ID to process
-- `--sender-name` (required for process/process-one) — Your name for emails/scripts
-- `--sender-phone` (required for process/process-one) — Your phone
-- `--sender-email` (required for process/process-one) — Your email
+- `--sender-name` (required for process/process-one/send-emails) — Your name for emails/scripts
+- `--sender-phone` (required for process/process-one/send-emails) — Your phone
+- `--sender-email` (required for process/process-one/send-emails) — Your email
+- `--count` (optional, default 10) — Number of emails to send (for send-emails)
 
 ## Pipeline Logic
 

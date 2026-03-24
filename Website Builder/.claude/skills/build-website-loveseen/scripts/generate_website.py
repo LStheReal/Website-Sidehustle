@@ -3,11 +3,11 @@
 LoveSeen-Inspired Template — Website Generator
 
 Takes business data (JSON file or dict) and generates a complete static website
-using the loveseen-inspired editorial beauty template. Warm cream palette, high-contrast
+using the loveseen-inspired editorial template. Warm cream palette, high-contrast
 serif typography, full-bleed hero, polaroid-style about image, statement section, gallery.
 
-Best for: Beauty salons, spas, photographers, makeup artists, wellness studios,
-life coaches, personal brands — any service business with a luxury/editorial feel.
+Best for: Service businesses that want a premium/editorial look (beauty, wellness,
+trades, photographers, personal brands, and local service teams).
 
 Usage:
     python3 generate_website.py --input business_data.json --output ./output/my-business
@@ -34,61 +34,65 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from execution.website_utils import copy_template, fill_directory, validate_output
+from execution.business_images import suggest_business_images
+from execution.copy_enrichment import enrich_template_copy
+from execution.website_storage import get_design_output_dir
 
 # Path to the template directory (relative to this script)
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "template"
+TEMPLATE_KEY = "loveseen"
 
 # All supported placeholders with German fallback defaults
 PLACEHOLDER_DEFAULTS = {
     # --- Core ---
-    "BUSINESS_NAME":            "Studio Mara",
-    "TAGLINE":                  "Schönheit & Wohlbefinden",
+    "BUSINESS_NAME":            "Atelier Nord",
+    "TAGLINE":                  "Qualitaet mit Handschlag",
     "META_DESCRIPTION":         "",
 
     # --- Nav ---
-    "NAV_CTA":                  "Termin buchen",
+    "NAV_CTA":                  "Kontakt",
     "NAV_LINK_1":               "Über uns",
     "NAV_LINK_2":               "Leistungen",
     "NAV_LINK_3":               "Galerie",
     "NAV_LINK_4":               "Kontakt",
 
     # --- Hero ---
-    "HERO_TITLE_LINE1":         "Deine Schönheit,",
-    "HERO_TITLE_LINE2":         "unser Handwerk",
-    "HERO_CTA":                 "Entdecken",
+    "HERO_TITLE_LINE1":         "Saubere Arbeit,",
+    "HERO_TITLE_LINE2":         "starkes Finish",
+    "HERO_CTA":                 "Projekt anfragen",
 
     # --- About ---
     "SECTION_LABEL_ABOUT":      "Über uns",
-    "ABOUT_HEADING_LINE1":      "Eine wahre Geschichte",
-    "ABOUT_HEADING_LINE2":      "über echte Schönheit",
-    "ABOUT_LEAD":               "Wir glauben, dass Schönheit von innen kommt — und ein bisschen Handwerk von uns.",
-    "ABOUT_DESCRIPTION":        "Unser Studio wurde mit einer einfachen Überzeugung gegründet: Jeder Mensch verdient ein Erlebnis, das sich besonders anfühlt. Wir verbinden Können mit Herzlichkeit.",
+    "ABOUT_HEADING_LINE1":      "Eine klare Haltung",
+    "ABOUT_HEADING_LINE2":      "fuer starke Resultate",
+    "ABOUT_LEAD":               "Wir verbinden Praezision, Verlaesslichkeit und persoenliche Beratung fuer Ergebnisse mit Bestand.",
+    "ABOUT_DESCRIPTION":        "Unser Team arbeitet strukturiert, termintreu und sauber bis ins Detail. So entstehen Loesungen, die fachlich ueberzeugen und im Alltag langfristig funktionieren.",
     "ABOUT_CTA":                "Unsere Leistungen",
 
     # --- Statement ---
     "STATEMENT_LABEL":          "Unser Versprechen",
-    "STATEMENT_LINE1":          "Es geht nicht",
-    "STATEMENT_LINE2":          "um Perfektion —",
-    "STATEMENT_LINE3":          "sondern um dich.",
+    "STATEMENT_LINE1":          "Klare Planung,",
+    "STATEMENT_LINE2":          "saubere Ausfuehrung,",
+    "STATEMENT_LINE3":          "spuerbare Qualitaet.",
 
     # --- Services ---
     "SECTION_LABEL_SERVICES":   "Was wir tun",
     "SERVICES_HEADING":         "Unsere Leistungen",
-    "SERVICE_1_TITLE":          "Haarpflege",
-    "SERVICE_1_DESCRIPTION":    "Schnitte, Farbe und Treatments, die zu dir passen — nicht zum Trend.",
-    "SERVICE_2_TITLE":          "Make-up",
-    "SERVICE_2_DESCRIPTION":    "Alltags-Make-up bis Braut-Look. Natürlich, präzise, du.",
-    "SERVICE_3_TITLE":          "Wellness",
-    "SERVICE_3_DESCRIPTION":    "Gesichtsbehandlungen und Pflegepakete für dein Wohlbefinden.",
-    "SERVICES_CTA":             "Termin vereinbaren",
+    "SERVICE_1_TITLE":          "Beratung",
+    "SERVICE_1_DESCRIPTION":    "Wir klaeren Anforderungen, Materialwahl und Ablauf in einem transparenten Erstgespraech.",
+    "SERVICE_2_TITLE":          "Ausfuehrung",
+    "SERVICE_2_DESCRIPTION":    "Wir setzen Ihr Projekt termintreu, praezise und mit hoher Sorgfalt um.",
+    "SERVICE_3_TITLE":          "Feinschliff",
+    "SERVICE_3_DESCRIPTION":    "Zum Abschluss kontrollieren wir alle Details fuer ein sauberes, stimmiges Resultat.",
+    "SERVICES_CTA":             "Unverbindlich anfragen",
 
     # --- Gallery ---
-    "GALLERY_LABEL":            "Folg uns",
-    "INSTAGRAM_HANDLE":         "studiomara",
+    "GALLERY_LABEL":            "Einblicke",
+    "INSTAGRAM_HANDLE":         "ateliernord",
     "INSTAGRAM_URL":            "#",
 
     # --- Contact ---
-    "CONTACT_TAGLINE":          "Zeig uns dein Lächeln, wir zeigen dir unseres.",
+    "CONTACT_TAGLINE":          "Schreiben oder rufen Sie uns an - wir beraten Sie persoenlich und unkompliziert.",
     "EMAIL_PLACEHOLDER":        "Deine E-Mail-Adresse",
     "CONTACT_LABEL_PHONE":      "Telefon",
     "CONTACT_LABEL_EMAIL":      "E-Mail",
@@ -97,14 +101,27 @@ PLACEHOLDER_DEFAULTS = {
 
     # --- Contact Info ---
     "PHONE":                    "+41 44 123 45 67",
-    "EMAIL":                    "hallo@studiomara.ch",
-    "ADDRESS":                  "Langstrasse 12, 8004 Zürich",
+    "EMAIL":                    "hallo@ateliernord.ch",
+    "ADDRESS":                  "Langstrasse 12, 8004 Zuerich",
     "OPENING_HOURS":            "Di–Sa 9–18 Uhr",
 
     # --- Footer ---
     "FOOTER_PRIVACY":           "Datenschutz",
     "FOOTER_TERMS":             "AGB",
-    "FOOTER_YEAR":              "2025",
+    "FOOTER_YEAR":              "2026",
+    "IMAGE_HERO":               "assets/images/hero.svg",
+    "IMAGE_ABOUT":              "assets/images/about.svg",
+    "IMAGE_GALLERY_1":          "assets/images/gallery1.svg",
+    "IMAGE_GALLERY_2":          "assets/images/gallery2.svg",
+    "IMAGE_GALLERY_3":          "assets/images/gallery3.svg",
+}
+
+IMAGE_SLOT_MAP = {
+    "IMAGE_HERO": "hero",
+    "IMAGE_ABOUT": "about",
+    "IMAGE_GALLERY_1": "gallery_1",
+    "IMAGE_GALLERY_2": "gallery_2",
+    "IMAGE_GALLERY_3": "gallery_3",
 }
 
 
@@ -120,6 +137,13 @@ def merge_with_defaults(data: dict) -> dict:
         name = merged.get("BUSINESS_NAME", "")
         tagline = merged.get("TAGLINE", "")
         merged["META_DESCRIPTION"] = f"{name} — {tagline}" if tagline else name
+    merged = enrich_template_copy(merged, "loveseen")
+
+    merged.setdefault("TEMPLATE_NAME", "loveseen")
+    auto_images = suggest_business_images(merged, IMAGE_SLOT_MAP)
+    for placeholder, image_url in auto_images.items():
+        if not data.get(placeholder):
+            merged[placeholder] = image_url
 
     return merged
 
@@ -157,7 +181,6 @@ def main():
     )
     parser.add_argument(
         "--output", "-o",
-        required=True,
         help="Output directory for generated website"
     )
     parser.add_argument(
@@ -196,7 +219,12 @@ def main():
         if val is not None:
             data[key] = val
 
-    result = generate_website(data, args.output, overwrite=args.overwrite)
+    output_dir = args.output
+    if not output_dir:
+        output_dir = str(get_design_output_dir(PROJECT_ROOT, data.get("BUSINESS_NAME", ""), TEMPLATE_KEY))
+        print(f"No --output provided. Using default: {output_dir}")
+
+    result = generate_website(data, output_dir, overwrite=args.overwrite)
 
     print(f"\n✓ Generated: {result['output_dir']}")
     print(f"  Replaced {result['replacements']} placeholders")

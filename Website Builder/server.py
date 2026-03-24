@@ -35,6 +35,9 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_ROOT)
 
 from execution.google_auth import get_credentials
+from execution.copy_enrichment import enrich_template_copy
+from execution.business_images import suggest_business_images
+from execution.website_storage import get_order_output_dir
 
 load_dotenv()
 
@@ -304,7 +307,7 @@ def register_lead():
     email = (data.get("email") or "").strip().lower()
 
     if not email or not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
-        return jsonify({"error": "Bitte gib eine g\u00fcltige E-Mail-Adresse ein."}), 400
+        return jsonify({"error": "Bitte gib eine gültige E-Mail-Adresse ein."}), 400
 
     try:
         _, worksheet = open_sheet()
@@ -312,20 +315,60 @@ def register_lead():
         print(f"Sheet error: {e}")
         return jsonify({"error": "Verbindungsfehler."}), 500
 
+    # Check if this email already has a lead (dedup)
+    try:
+        all_values = worksheet.get_all_values()
+        email_col = COL["owner_email"] - 1
+        for row_idx, row_data in enumerate(all_values[1:], start=2):
+            if email_col < len(row_data) and row_data[email_col].strip().lower() == email:
+                existing = {}
+                for i, col_name in enumerate(COLUMN_NAMES):
+                    existing[col_name] = row_data[i] if i < len(row_data) else ""
+                print(f"[register] Existing lead for {email} → {existing['lead_id']}")
+                template_keys = ["earlydog", "bia", "liveblocks", "loveseen"]
+                return jsonify({
+                    "lead_id": existing["lead_id"],
+                    "business_name": existing.get("business_name", ""),
+                    "category": existing.get("category", ""),
+                    "city": existing.get("city", ""),
+                    "phone": existing.get("phone", ""),
+                    "owner_email": existing.get("owner_email", ""),
+                    "owner_name": existing.get("owner_name", ""),
+                    "address": existing.get("address", ""),
+                    "status": existing.get("status", ""),
+                    "previews": [f"/api/preview/{existing['lead_id']}/{t}" for t in template_keys],
+                    "domains": [],
+                    "chosen_template": existing.get("chosen_template", ""),
+                    "notes": existing.get("notes", ""),
+                })
+    except Exception as e:
+        print(f"Dedup check error: {e}")
+
     # Generate a 12-char hex lead_id
     import time
     raw = f"{email}{time.time()}".encode()
     lead_id = hashlib.sha256(raw).hexdigest()[:12]
 
-    # Build a new row with minimal data
+    # Build row explicitly — only set known fields, everything else stays empty
     now = datetime.now().isoformat()
-    row = [""] * len(COLUMN_NAMES)
-    row[COL["lead_id"] - 1] = lead_id
-    row[COL["scraped_at"] - 1] = now
-    row[COL["owner_email"] - 1] = email
-    row[COL["emails"] - 1] = email
-    row[COL["status"] - 1] = "registered_no_code"
-    row[COL["acquisition_source"] - 1] = "organic"
+    row = []
+    for col_name in COLUMN_NAMES:
+        if col_name == "lead_id":
+            row.append(lead_id)
+        elif col_name == "scraped_at":
+            row.append(now)
+        elif col_name == "owner_email":
+            row.append(email)
+        elif col_name == "emails":
+            row.append(email)
+        elif col_name == "status":
+            row.append("registered_no_code")
+        elif col_name == "acquisition_source":
+            row.append("organic")
+        else:
+            row.append("")
+
+    print(f"[register] New lead: {lead_id} email: {email} row_len: {len(row)} non_empty: {sum(1 for v in row if v)}")
 
     try:
         worksheet.append_row(row, value_input_option="USER_ENTERED")
@@ -381,6 +424,18 @@ def update_lead(lead_id):
         updates["category"] = data["category"]
     if data.get("city"):
         updates["city"] = data["city"]
+    if data.get("phone"):
+        updates["phone"] = data["phone"]
+    if data.get("address"):
+        updates["address"] = data["address"]
+    if data.get("chosen_template"):
+        updates["chosen_template"] = data["chosen_template"]
+    if data.get("domain_option_1"):
+        updates["domain_option_1"] = data["domain_option_1"]
+    if data.get("domain_option_2"):
+        updates["domain_option_2"] = data["domain_option_2"]
+    if data.get("domain_option_3"):
+        updates["domain_option_3"] = data["domain_option_3"]
 
     if updates:
         try:
@@ -556,6 +611,63 @@ TEMPLATE_DIRS = {
     "loveseen": ".claude/skills/build-website-loveseen/template",
 }
 
+# --- Skill module imports for website generation ---
+SKILLS_DIR = os.path.join(PROJECT_ROOT, ".claude", "skills")
+sys.path.insert(0, os.path.join(SKILLS_DIR, "build-website-earlydog", "scripts"))
+sys.path.insert(0, os.path.join(SKILLS_DIR, "build-website-bia", "scripts"))
+sys.path.insert(0, os.path.join(SKILLS_DIR, "build-website-liveblocks", "scripts"))
+sys.path.insert(0, os.path.join(SKILLS_DIR, "build-website-loveseen", "scripts"))
+
+# Import each template's generate_website module
+import importlib
+_gen_modules = {}
+for _tkey in ["earlydog", "bia", "liveblocks", "loveseen"]:
+    _script = os.path.join(SKILLS_DIR, f"build-website-{_tkey}", "scripts", "generate_website.py")
+    if os.path.exists(_script):
+        _spec = importlib.util.spec_from_file_location(f"gen_{_tkey}", _script)
+        _mod = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_mod)
+        _gen_modules[_tkey] = _mod
+
+
+def _lead_to_placeholder_data(lead: dict, customizations: dict = None) -> dict:
+    """Map lead data from Google Sheets + anpassen step to placeholder dict.
+
+    This dict is passed to merge_with_defaults() from the generate_website module,
+    which fills in defaults, enriches copy, and fetches Pexels images.
+    """
+    cust = customizations or {}
+    desc = cust.get("description", "")
+    vals = cust.get("values", "")
+
+    data = {
+        "BUSINESS_NAME": lead.get("business_name", ""),
+        "PHONE": lead.get("phone", ""),
+        "EMAIL": lead.get("owner_email", "") or lead.get("emails", ""),
+        "ADDRESS": lead.get("address", "") or lead.get("city", ""),
+        "category": lead.get("category", ""),
+        "city": lead.get("city", ""),
+    }
+
+    # Map description to relevant fields
+    if desc:
+        data["ABOUT_DESCRIPTION"] = desc
+        data["HERO_DESCRIPTION"] = desc
+
+    # Parse values into individual items for service/feature/value fields
+    if vals:
+        items = [v.strip() for v in re.split(r"[,\n;]+", vals) if v.strip()]
+        for i, item in enumerate(items[:6]):
+            data[f"SERVICE_{i+1}_TITLE"] = item
+        if len(items) >= 2:
+            data["STATEMENT_LINE1"] = items[0]
+            data["STATEMENT_LINE2"] = items[1] if len(items) > 1 else ""
+            data["STATEMENT_LINE3"] = items[2] if len(items) > 2 else ""
+
+    # Remove empty values so defaults are used
+    return {k: v for k, v in data.items() if v}
+
+
 # Cache lead data briefly to avoid repeated sheet lookups for assets
 _preview_lead_cache = {}
 
@@ -620,6 +732,33 @@ TEMPLATE_PLACEHOLDERS = {
         "CONTACT_LABEL_PHONE", "CONTACT_LABEL_EMAIL", "CONTACT_LABEL_ADDRESS",
         "CONTACT_LABEL_HOURS", "PHONE", "EMAIL", "ADDRESS", "OPENING_HOURS",
         "FOOTER_PRIVACY", "FOOTER_TERMS", "FOOTER_YEAR",
+    ],
+}
+
+
+TEMPLATE_IMAGE_SLOTS = {
+    "earlydog": [
+        {"slot": "hero", "file": "hero.svg", "desc": "Grosses Hero-Bild oben auf der Seite"},
+        {"slot": "section1", "file": "section1.svg", "desc": "Service-Bereich 1"},
+        {"slot": "section2", "file": "section2.svg", "desc": "Service-Bereich 2"},
+        {"slot": "section3", "file": "section3.svg", "desc": "Service-Bereich 3"},
+    ],
+    "bia": [
+        {"slot": "hero", "file": "hero.svg", "desc": "Grosses Hero-Bild oben auf der Seite"},
+        {"slot": "showcase", "file": "showcase.svg", "desc": "Showcase/Portfolio-Bereich"},
+        {"slot": "cta", "file": "cta.svg", "desc": "Call-to-Action-Bereich"},
+        {"slot": "contact", "file": "contact.svg", "desc": "Kontakt-Bereich"},
+    ],
+    "liveblocks": [
+        {"slot": "feature", "file": "feature.svg", "desc": "Feature/Highlight-Bereich"},
+        {"slot": "about", "file": "about.svg", "desc": "Über-uns-Bereich"},
+    ],
+    "loveseen": [
+        {"slot": "hero", "file": "hero.jpg", "desc": "Grosses Hero-Bild oben"},
+        {"slot": "about", "file": "about.jpg", "desc": "Über-uns-Bereich"},
+        {"slot": "gallery1", "file": "gallery1.jpg", "desc": "Galerie Hauptbild"},
+        {"slot": "gallery2", "file": "gallery2.jpg", "desc": "Galerie klein 1"},
+        {"slot": "gallery3", "file": "gallery3.jpg", "desc": "Galerie klein 2"},
     ],
 }
 
@@ -853,49 +992,63 @@ def _build_order_site(
     logo_ext: str | None,
     image_data: list,
 ) -> str:
-    """Build the deployable static site exactly as shown in the preview.
+    """Build the deployable static site using the new generation pipeline.
 
-    Copies the template, applies AI-generated text (using the cached result from
-    the preview if available), saves uploaded customer images as real files, and
-    injects them into the HTML.  Returns the path to the built site directory.
+    Uses generate_website() from the skill scripts (enrichment + Pexels images),
+    then overlays uploaded customer images and logo.
+    Returns the path to the built site directory.
     """
     lead_id = lead.get("lead_id", "unknown")
     site_dir = os.path.join(PROJECT_ROOT, ".tmp", f"order_{lead_id}")
-    template_path = os.path.join(PROJECT_ROOT, TEMPLATE_DIRS[template_key])
 
-    # Copy template
-    if os.path.exists(site_dir):
-        shutil.rmtree(site_dir)
-    shutil.copytree(template_path, site_dir)
+    gen_mod = _gen_modules.get(template_key)
+    if not gen_mod:
+        raise ValueError(f"No generation module for template: {template_key}")
 
-    # Generate text content — same cache key as the preview, so this is a cache hit
-    replacements = None
-    if customizations.get("description") or customizations.get("values"):
-        replacements = _generate_content_with_ai(lead, template_key, customizations)
-    if not replacements:
-        replacements = _build_replacements(lead, customizations)
+    # Build placeholder data from lead + anpassen customizations
+    placeholder_data = _lead_to_placeholder_data(lead, customizations)
 
-    # Apply text replacements to all HTML files
-    for html_file in Path(site_dir).rglob("*.html"):
-        content = html_file.read_text(encoding="utf-8")
-        for key, value in replacements.items():
-            content = content.replace("{{" + key + "}}", str(value))
-        content = re.sub(r"\{\{[A-Z_0-9]+\}\}", "", content)
-        html_file.write_text(content, encoding="utf-8")
+    # If customer uploaded images, pass them as IMAGE_* overrides
+    # Save image files first so we can reference them
+    if image_data:
+        assets_img_dir = os.path.join(site_dir, "assets", "images")
+        os.makedirs(assets_img_dir, exist_ok=True)
+        slot_map = getattr(gen_mod, "IMAGE_SLOT_MAP", {})
+        image_keys = list(slot_map.keys())
+        for i, (img_bytes, ext) in enumerate(image_data):
+            if i < len(image_keys):
+                filename = f"customer_img_{i + 1}{ext}"
+                # We'll save these after generate_website copies the template
+                # For now, just set the placeholder to the relative path
+                placeholder_data[image_keys[i]] = f"assets/images/{filename}"
 
-    # Work on index.html for image injection
-    index_path = os.path.join(site_dir, "index.html")
-    with open(index_path, "r", encoding="utf-8") as f:
-        html = f.read()
+    # Generate website using the skill's pipeline
+    # (enrichment + Pexels for unfilled IMAGE_* slots + template copy + fill)
+    result = gen_mod.generate_website(placeholder_data, site_dir, overwrite=True)
+    print(f"[build] Generated {template_key} for {lead_id}: {result.get('validation', {})}")
 
-    assets_img_dir = os.path.join(site_dir, "assets", "images")
-    os.makedirs(assets_img_dir, exist_ok=True)
+    # Now overlay uploaded customer images as real files
+    if image_data:
+        assets_img_dir = os.path.join(site_dir, "assets", "images")
+        os.makedirs(assets_img_dir, exist_ok=True)
+        for i, (img_bytes, ext) in enumerate(image_data):
+            filename = f"customer_img_{i + 1}{ext}"
+            with open(os.path.join(assets_img_dir, filename), "wb") as f:
+                f.write(img_bytes)
 
-    # Save and inject customer logo
+    # Overlay customer logo
     if logo_bytes and logo_ext:
+        assets_img_dir = os.path.join(site_dir, "assets", "images")
+        os.makedirs(assets_img_dir, exist_ok=True)
         logo_filename = f"customer_logo{logo_ext}"
         with open(os.path.join(assets_img_dir, logo_filename), "wb") as f:
             f.write(logo_bytes)
+
+        # Inject logo into HTML
+        index_path = os.path.join(site_dir, "index.html")
+        with open(index_path, "r", encoding="utf-8") as f:
+            html = f.read()
+
         logo_rel = f"assets/images/{logo_filename}"
         logo_img = f'<img src="{logo_rel}" alt="Logo" style="height:40px;width:auto;object-fit:contain;">'
         footer_logo_img = f'<img src="{logo_rel}" alt="Logo" style="height:32px;width:auto;object-fit:contain;">'
@@ -910,35 +1063,60 @@ def _build_order_site(
             html, flags=re.IGNORECASE, count=1,
         )
 
-    # Save customer images and inject into HTML image slots
-    # Matches img tags whose src points to assets/ (template placeholder images)
-    if image_data:
-        img_tag_re = re.compile(
-            r'(<img\s[^>]*?)src="(assets/[^"]*)"([^>]*?>)', re.IGNORECASE
-        )
-        matches = list(img_tag_re.finditer(html))
-
-        customer_srcs = []
-        for i, (img_bytes, ext) in enumerate(image_data):
-            filename = f"customer_img_{i + 1}{ext}"
-            with open(os.path.join(assets_img_dir, filename), "wb") as f:
-                f.write(img_bytes)
-            customer_srcs.append(f"assets/images/{filename}")
-
-        # Replace from end to keep string offsets valid
-        for i in range(min(len(customer_srcs), len(matches)) - 1, -1, -1):
-            m = matches[i]
-            new_tag = (
-                m.group(1)
-                + f'src="{customer_srcs[i]}" style="object-fit:cover;width:100%;height:100%;"'
-                + m.group(3)
-            )
-            html = html[: m.start()] + new_tag + html[m.end() :]
-
-    with open(index_path, "w", encoding="utf-8") as f:
-        f.write(html)
+        with open(index_path, "w", encoding="utf-8") as f:
+            f.write(html)
 
     return site_dir
+
+
+@app.route("/api/check-domains", methods=["POST"])
+def check_domains():
+    """Check domain availability via RDAP / DNS."""
+    import socket
+    import urllib.request
+    import urllib.error
+
+    data = request.get_json()
+    domains = data.get("domains", [])
+    if not domains:
+        return jsonify({"error": "No domains provided"}), 400
+
+    results = []
+    for domain in domains[:10]:
+        tld = domain.rsplit(".", 1)[-1] if "." in domain else ""
+        available = None
+        try:
+            if tld == "ch":
+                rdap_url = f"https://rdap.nic.ch/domain/{domain}"
+            elif tld == "com":
+                rdap_url = f"https://rdap.verisign.com/com/v1/domain/{domain}"
+            else:
+                rdap_url = None
+
+            if rdap_url:
+                req = urllib.request.Request(rdap_url)
+                try:
+                    urllib.request.urlopen(req, timeout=5)
+                    available = False  # 200 = registered
+                except urllib.error.HTTPError as e:
+                    if e.code == 404:
+                        available = True  # 404 = available
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # Fallback: DNS check
+        if available is None:
+            try:
+                socket.getaddrinfo(domain, None)
+                available = False
+            except socket.gaierror:
+                available = True
+
+        results.append({"domain": domain, "available": available, "tld": f".{tld}"})
+
+    return jsonify({"results": results})
 
 
 @app.route("/api/upload-temp", methods=["POST"])
@@ -968,11 +1146,110 @@ def serve_temp(filename):
     return send_from_directory(TEMP_UPLOAD_DIR, filename)
 
 
-@app.route("/api/preview/<lead_id>/<template_key>")
-def serve_preview(lead_id, template_key):
-    """Serve a template with placeholders replaced by real lead data + customizations."""
+@app.route("/api/preview-with-images", methods=["POST"])
+def preview_with_images():
+    """Generate a self-contained HTML preview using the new generation pipeline."""
+    template_key = request.form.get("template", "")
+    lead_id = request.form.get("lead_id", "")
+    description = request.form.get("description", "")
+    values = request.form.get("values", "")
+
     if template_key not in TEMPLATE_DIRS:
         return "Template not found", 404
+
+    gen_mod = _gen_modules.get(template_key)
+    if not gen_mod:
+        return "Generation module not found", 500
+
+    # Get lead data
+    lead = _preview_lead_cache.get(lead_id)
+    if not lead:
+        try:
+            _, worksheet = open_sheet()
+            lead = find_lead_by_id(worksheet, lead_id)
+            if lead:
+                _preview_lead_cache[lead_id] = lead
+        except Exception as e:
+            print(f"Preview sheet error: {e}")
+
+    # Build placeholder data from lead + anpassen customizations
+    cust = {"description": description, "values": values}
+    placeholder_data = _lead_to_placeholder_data(lead, cust) if lead else {}
+    if description:
+        placeholder_data["ABOUT_DESCRIPTION"] = description
+        placeholder_data["HERO_DESCRIPTION"] = description
+
+    # Process uploaded images — convert to data URLs for inline preview
+    import base64 as b64mod
+    image_files = request.files.getlist("images")
+    image_data_urls = []
+    for img in image_files:
+        if img and img.filename:
+            img_bytes = img.read()
+            if img_bytes:
+                img_b64 = b64mod.b64encode(img_bytes).decode()
+                img_mime = img.content_type or "image/png"
+                image_data_urls.append(f"data:{img_mime};base64,{img_b64}")
+
+    # Override IMAGE_* placeholders with uploaded images (data URLs)
+    if image_data_urls:
+        slot_map = getattr(gen_mod, "IMAGE_SLOT_MAP", {})
+        image_keys = list(slot_map.keys())
+        for i, data_url in enumerate(image_data_urls):
+            if i < len(image_keys):
+                placeholder_data[image_keys[i]] = data_url
+
+    # Get merged data with enrichment + Pexels images for unfilled slots
+    merged = gen_mod.merge_with_defaults(placeholder_data)
+
+    # Read template HTML and replace all placeholders
+    template_path = os.path.join(PROJECT_ROOT, TEMPLATE_DIRS[template_key], "index.html")
+    with open(template_path, "r", encoding="utf-8") as f:
+        html = f.read()
+
+    for key, value in merged.items():
+        html = html.replace("{{" + key + "}}", str(value))
+    html = re.sub(r"\{\{[A-Z_0-9]+\}\}", "", html)
+
+    # Fix relative asset paths for non-image assets (CSS, JS, fonts)
+    base_path = "/" + TEMPLATE_DIRS[template_key] + "/"
+    html = html.replace('href="styles.css"', f'href="{base_path}styles.css"')
+    html = html.replace('href="./styles.css"', f'href="{base_path}styles.css"')
+
+    # Process logo
+    logo_file = request.files.get("logo")
+    if logo_file and logo_file.filename:
+        logo_bytes = logo_file.read()
+        if logo_bytes:
+            logo_b64 = b64mod.b64encode(logo_bytes).decode()
+            logo_mime = logo_file.content_type or "image/png"
+            logo_data_url = f"data:{logo_mime};base64,{logo_b64}"
+            logo_img = f'<img src="{logo_data_url}" alt="Logo" style="height:40px;width:auto;object-fit:contain;">'
+            footer_logo = f'<img src="{logo_data_url}" alt="Logo" style="height:32px;width:auto;object-fit:contain;">'
+            html = re.sub(
+                r'(<(?:a|div)[^>]*class="[^"]*nav-logo[^"]*"[^>]*>)([\s\S]*?)(</(?:a|div)>)',
+                r'\g<1>' + logo_img + r'\g<3>', html, flags=re.IGNORECASE, count=1)
+            html = re.sub(
+                r'(<(?:a|div|span)[^>]*class="[^"]*(?:contact-logo|footer-logo(?:-text)?)[^"]*"[^>]*>)([\s\S]*?)(</(?:a|div|span)>)',
+                r'\g<1>' + footer_logo + r'\g<3>', html, flags=re.IGNORECASE, count=1)
+
+    # Inline CSS so srcdoc is self-contained
+    css_path = os.path.join(PROJECT_ROOT, TEMPLATE_DIRS[template_key], "styles.css")
+    if os.path.exists(css_path):
+        with open(css_path, "r", encoding="utf-8") as f:
+            css = f.read()
+        html = re.sub(r'<link[^>]*href="[^"]*style[^"]*\.css"[^>]*>', f'<style>{css}</style>', html, flags=re.IGNORECASE)
+
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
+@app.route("/api/preview/<lead_id>/<template_key>")
+def serve_preview(lead_id, template_key):
+    """Serve a template preview using the new generation pipeline (enrichment + Pexels)."""
+    if template_key not in TEMPLATE_DIRS:
+        return "Template not found", 404
+
+    gen_mod = _gen_modules.get(template_key)
 
     # Get lead data (use cache to avoid repeated sheet calls for assets)
     lead = _preview_lead_cache.get(lead_id)
@@ -985,20 +1262,6 @@ def serve_preview(lead_id, template_key):
         except Exception as e:
             print(f"Preview sheet error: {e}")
 
-    if not lead:
-        # No lead found — still serve template with path rewriting so CSS/assets load
-        template_path = os.path.join(PROJECT_ROOT, TEMPLATE_DIRS[template_key], "index.html")
-        with open(template_path, "r", encoding="utf-8") as f:
-            html = f.read()
-        # Fix relative asset paths to absolute
-        base_path = "/" + TEMPLATE_DIRS[template_key] + "/"
-        html = html.replace('src="assets/', f'src="{base_path}assets/')
-        html = html.replace("src='assets/", f"src='{base_path}assets/")
-        html = html.replace('href="assets/', f'href="{base_path}assets/')
-        html = html.replace('href="style', f'href="{base_path}style')
-        html = html.replace('href="./style', f'href="{base_path}style')
-        return html, 200, {"Content-Type": "text/html; charset=utf-8"}
-
     # Read customizations from query params
     customizations = {
         "description": request.args.get("description", ""),
@@ -1007,65 +1270,50 @@ def serve_preview(lead_id, template_key):
     logo_url = request.args.get("logo", "")
     image_urls = request.args.getlist("img")
 
-    # Read template HTML
+    # Build placeholder data from lead + customizations
+    placeholder_data = _lead_to_placeholder_data(lead, customizations) if lead else {}
+
+    # Override IMAGE_* with uploaded image URLs if provided
+    if image_urls and gen_mod:
+        slot_map = getattr(gen_mod, "IMAGE_SLOT_MAP", {})
+        image_keys = list(slot_map.keys())
+        for i, url in enumerate(image_urls):
+            if i < len(image_keys):
+                placeholder_data[image_keys[i]] = url
+
+    # Get merged data with enrichment + Pexels images
+    if gen_mod:
+        merged = gen_mod.merge_with_defaults(placeholder_data)
+    else:
+        merged = placeholder_data
+
+    # Read template HTML and replace all placeholders
     template_path = os.path.join(PROJECT_ROOT, TEMPLATE_DIRS[template_key], "index.html")
     with open(template_path, "r", encoding="utf-8") as f:
         html = f.read()
 
-    # Replace all {{PLACEHOLDER}} patterns
-    # Try AI-powered content generation if API key is available and customizations provided
-    replacements = None
-    if customizations.get("description") or customizations.get("values"):
-        replacements = _generate_content_with_ai(lead, template_key, customizations)
-    # Fallback to static replacement if AI is unavailable
-    if not replacements:
-        replacements = _build_replacements(lead, customizations)
-    for key, value in replacements.items():
-        html = html.replace("{{" + key + "}}", value)
-
-    # Replace any remaining {{...}} with empty string
+    for key, value in merged.items():
+        html = html.replace("{{" + key + "}}", str(value))
     html = re.sub(r"\{\{[A-Z_0-9]+\}\}", "", html)
 
     # Fix relative asset paths to point to the template directory
     base_path = "/" + TEMPLATE_DIRS[template_key] + "/"
-    html = html.replace('src="assets/', f'src="{base_path}assets/')
-    html = html.replace("src='assets/", f"src='{base_path}assets/")
-    html = html.replace('href="assets/', f'href="{base_path}assets/')
-    html = html.replace('href="style', f'href="{base_path}style')
-    html = html.replace('href="./style', f'href="{base_path}style')
+    html = html.replace('href="styles.css"', f'href="{base_path}styles.css"')
+    html = html.replace('href="./styles.css"', f'href="{base_path}styles.css"')
+    # Image src values are now Pexels URLs or data URLs from placeholder fill, no need
+    # to rewrite them. Only rewrite remaining relative asset paths (fonts, JS, etc.)
+    html = re.sub(r'src="(assets/(?!images)[^"]*)"', f'src="{base_path}\\1"', html)
 
-    # Replace images with uploaded files
-    if logo_url or image_urls:
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(html, "html.parser")
-
-        # Replace nav logo with uploaded logo image
-        if logo_url:
-            nav_logo = soup.select_one(".nav-logo")
-            if nav_logo:
-                # Clear existing content (text or inline SVG) and insert img
-                nav_logo.clear()
-                logo_img = soup.new_tag("img", src=logo_url, alt="Logo")
-                logo_img["style"] = "height: 40px; width: auto; object-fit: contain;"
-                nav_logo.append(logo_img)
-            # Also replace footer logo if present
-            footer_logo = soup.select_one(".footer-logo, .footer-logo-text")
-            if footer_logo:
-                footer_logo.clear()
-                flogo_img = soup.new_tag("img", src=logo_url, alt="Logo")
-                flogo_img["style"] = "height: 32px; width: auto; object-fit: contain;"
-                footer_logo.append(flogo_img)
-
-        # Replace SVG placeholder images with uploaded images
-        if image_urls:
-            img_tags = soup.find_all("img")
-            svg_imgs = [img for img in img_tags if img.get("src", "").endswith(".svg")]
-            for i, url in enumerate(image_urls):
-                if i < len(svg_imgs):
-                    svg_imgs[i]["src"] = url
-                    svg_imgs[i]["style"] = "object-fit: cover; width: 100%; height: 100%;"
-
-        html = str(soup)
+    # Replace logo with uploaded logo if provided
+    if logo_url:
+        logo_img = f'<img src="{logo_url}" alt="Logo" style="height:40px;width:auto;object-fit:contain;">'
+        html = re.sub(
+            r'(<(?:a|div)[^>]*class="[^"]*nav-logo[^"]*"[^>]*>)([\s\S]*?)(</(?:a|div)>)',
+            r'\g<1>' + logo_img + r'\g<3>', html, flags=re.IGNORECASE, count=1)
+        footer_logo = f'<img src="{logo_url}" alt="Logo" style="height:32px;width:auto;object-fit:contain;">'
+        html = re.sub(
+            r'(<(?:a|div|span)[^>]*class="[^"]*(?:contact-logo|footer-logo(?:-text)?)[^"]*"[^>]*>)([\s\S]*?)(</(?:a|div|span)>)',
+            r'\g<1>' + footer_logo + r'\g<3>', html, flags=re.IGNORECASE, count=1)
 
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 

@@ -158,6 +158,74 @@ def print_domain_instructions(domain: str, project_name: str):
     print(f"  SSL will be auto-provisioned once DNS propagates (usually 5-30 min).")
 
 
+def connect_custom_domain(project_name: str, domain: str) -> dict:
+    """Add a custom domain to a Cloudflare Pages project via API.
+
+    Requires CF_API_TOKEN and CF_ACCOUNT_ID environment variables.
+    """
+    import urllib.request
+    import urllib.error
+
+    cf_token = os.environ.get("CF_API_TOKEN", "")
+    cf_account = os.environ.get("CF_ACCOUNT_ID", "")
+
+    if not cf_token or not cf_account:
+        raise RuntimeError(
+            "Missing CF_API_TOKEN or CF_ACCOUNT_ID. Set them in .env or as environment variables.\n"
+            "Get your API token at: https://dash.cloudflare.com/profile/api-tokens\n"
+            "Required permissions: Cloudflare Pages -> Edit"
+        )
+
+    url = f"https://api.cloudflare.com/client/v4/accounts/{cf_account}/pages/projects/{project_name}/domains"
+
+    payload = json.dumps({"name": domain}).encode("utf-8")
+
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {cf_token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8")
+        try:
+            error_json = json.loads(error_body)
+            errors = error_json.get("errors", [])
+            if any("already exists" in str(err).lower() for err in errors):
+                print(f"  Domain '{domain}' is already connected to '{project_name}'.")
+                return {"success": True, "already_exists": True, "domain": domain}
+            raise RuntimeError(f"Cloudflare API error: {errors}")
+        except json.JSONDecodeError:
+            raise RuntimeError(f"Cloudflare API error ({e.code}): {error_body}")
+
+    if not result.get("success"):
+        raise RuntimeError(f"Cloudflare API error: {result.get('errors', [])}")
+
+    print(f"\n  Domain '{domain}' added to project '{project_name}'")
+    print(f"")
+    print(f"  Next step — add this DNS record at your domain registrar:")
+    print(f"  Type:  CNAME")
+    print(f"  Name:  @ (or {domain})")
+    print(f"  Value: {project_name}.pages.dev")
+    print(f"")
+    print(f"  SSL will be auto-provisioned once DNS propagates (5-30 min).")
+
+    return {
+        "success": True,
+        "domain": domain,
+        "project_name": project_name,
+        "pages_domain": f"{project_name}.pages.dev",
+        "dns_record": {"type": "CNAME", "name": domain, "value": f"{project_name}.pages.dev"},
+    }
+
+
 # --- Google Sheets integration ---
 
 COL_LEAD_ID = 1
@@ -207,16 +275,34 @@ def update_sheet_with_deployment(sheet_url: str, lead_id: str, live_url: str) ->
 
 def main():
     parser = argparse.ArgumentParser(description="Deploy a static website to Cloudflare Pages")
-    parser.add_argument("--site-dir", required=True, help="Path to folder with static site files")
+    parser.add_argument("--site-dir", help="Path to folder with static site files (optional if using --connect-domain only)")
     parser.add_argument("--project-name", required=True, help="Cloudflare Pages project name")
     parser.add_argument("--domain", help="Custom domain to configure (e.g. swisstextilreinigung.ch)")
+    parser.add_argument("--connect-domain", action="store_true",
+                        help="Connect custom domain via Cloudflare API (requires CF_API_TOKEN, CF_ACCOUNT_ID in .env)")
     parser.add_argument("--sheet-url", help="Google Sheet URL to update with live URL")
     parser.add_argument("--lead-id", help="Lead ID for the sheet row to update")
     args = parser.parse_args()
 
-    # Validate
-    site_dir = validate_site_dir(args.site_dir)
     project_name = sanitize_project_name(args.project_name)
+
+    # Mode 1: Connect domain only (no deploy)
+    if args.connect_domain and args.domain and not args.site_dir:
+        print(f"\n=== Connecting Domain to Cloudflare Pages ===")
+        print(f"  Project:  {project_name}")
+        print(f"  Domain:   {args.domain}")
+        result = connect_custom_domain(project_name, args.domain)
+        output_path = save_intermediate(result, "domain_connection")
+        print(f"\n  Result saved to: {output_path}")
+        print(f"\n--- JSON OUTPUT ---")
+        print(json.dumps(result, indent=2))
+        return
+
+    # Mode 2: Deploy (and optionally connect domain)
+    if not args.site_dir:
+        parser.error("--site-dir is required for deployment (omit it only with --connect-domain and --domain)")
+
+    site_dir = validate_site_dir(args.site_dir)
 
     print(f"\n=== Deploying to Cloudflare Pages ===")
     print(f"  Site directory: {site_dir}")
@@ -246,9 +332,17 @@ def main():
     print(f"\n=== Deployed successfully! ===")
     print(f"  Live URL: {live_url}")
 
-    # Custom domain instructions
+    # Connect domain via API or print instructions
     if args.domain:
-        print_domain_instructions(args.domain, project_name)
+        if args.connect_domain:
+            print(f"\nConnecting custom domain via Cloudflare API...")
+            try:
+                connect_custom_domain(project_name, args.domain)
+            except RuntimeError as e:
+                print(f"  Warning: {e}")
+                print_domain_instructions(args.domain, project_name)
+        else:
+            print_domain_instructions(args.domain, project_name)
 
     # Save result
     result = {

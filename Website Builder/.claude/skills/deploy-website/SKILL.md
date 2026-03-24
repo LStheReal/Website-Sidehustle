@@ -36,10 +36,21 @@ python3 .claude/skills/deploy-website/scripts/deploy_website.py \
   --lead-id "c966e7e2540c"
 ```
 
+### Connect a custom domain (no deploy):
+```bash
+python3 .claude/skills/deploy-website/scripts/deploy_website.py \
+  --project-name "kmu-maler-mueller-abc123" \
+  --domain "maler-mueller.ch" \
+  --connect-domain
+```
+
+This calls the Cloudflare API to add the domain to the project. Requires `CF_API_TOKEN` and `CF_ACCOUNT_ID` in `.env`.
+
 ### Parameters
-- `--site-dir` (required) — Path to the folder containing the static site files
+- `--site-dir` (required, unless using `--connect-domain` only) — Path to the folder containing the static site files
 - `--project-name` (required) — Cloudflare Pages project name (lowercase, hyphens ok)
 - `--domain` (optional) — Custom domain to configure (e.g. `swisstextilreinigung.ch`)
+- `--connect-domain` (optional) — Connect domain via Cloudflare API instead of just printing DNS instructions. Requires `CF_API_TOKEN` and `CF_ACCOUNT_ID` in `.env`
 - `--sheet-url` (optional) — Google Sheet URL to update with live URL
 - `--lead-id` (optional) — Lead ID for the sheet row to update
 

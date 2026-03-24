@@ -169,7 +169,7 @@ a { text-decoration: none; color: inherit; }
     padding-top: 80px;
     min-height: 100vh;
     display: flex;
-    align-items: center;
+    align-items: safe center;
     justify-content: center;
 }
 
@@ -389,6 +389,45 @@ a { text-decoration: none; color: inherit; }
     border-style: solid;
 }
 
+/* Image list (accumulated uploads) */
+.db-image-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+}
+.db-image-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 1rem;
+    border-radius: 10px;
+    background: var(--card2);
+    border: 0.5px solid var(--stroke);
+}
+.db-image-name {
+    font-size: 0.82rem;
+    color: var(--green);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    margin-right: 0.5rem;
+}
+.db-image-remove {
+    background: none;
+    border: none;
+    color: var(--grey);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0 0.25rem;
+    line-height: 1;
+    transition: color 0.2s;
+    flex-shrink: 0;
+}
+.db-image-remove:hover { color: var(--red); }
+
 /* ============================================
    BUTTONS
    ============================================ */
@@ -442,6 +481,8 @@ a { text-decoration: none; color: inherit; }
     margin-top: 2.5rem;
     width: 100%;
     max-width: var(--max-w);
+    margin-left: auto;
+    margin-right: auto;
 }
 .db-btn-full { width: 100%; max-width: 320px; }
 
@@ -543,6 +584,7 @@ a { text-decoration: none; color: inherit; }
 .db-form-container {
     width: 100%;
     max-width: var(--max-w);
+    margin: 0 auto;
 }
 .db-badge {
     display: inline-flex;
@@ -874,16 +916,9 @@ a { text-decoration: none; color: inherit; }
     color: var(--db-text-secondary);
     font-size: 1rem;
 }
-.db-spinner {
-    width: 36px;
-    height: 36px;
-    border: 3px solid var(--db-border);
-    border-top-color: var(--db-accent);
-    border-radius: 50%;
-    animation: dbSpin 0.8s linear infinite;
-}
-@keyframes dbSpin {
-    to { transform: rotate(360deg); }
+.db-lottie-sm {
+    width: 100px;
+    height: 100px;
 }
 
 /* ============================================
@@ -902,21 +937,57 @@ a { text-decoration: none; color: inherit; }
     gap: 1.5rem;
 }
 .db-generating.visible { display: flex; }
-.db-spinner {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    border: 3px solid var(--stroke);
-    border-top-color: var(--green);
-    animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-    to { transform: rotate(360deg); }
+.db-lottie-lg {
+    width: 160px;
+    height: 160px;
 }
 .db-generating-text {
     font-size: 1.1rem;
     font-weight: 600;
     color: var(--white);
+}
+
+/* ============================================
+   PAYMENT SCREEN — full viewport white
+   ============================================ */
+.db-payment-screen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: #ffffff;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    overflow-y: auto;
+}
+.db-payment-screen.active { display: flex; }
+.db-payment-inner {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.db-payment-inner #stripe-container {
+    width: 100%;
+}
+.db-payment-footer {
+    margin-top: 2rem;
+    text-align: center;
+}
+.db-payment-footer p {
+    font-size: 0.85rem;
+    color: #888;
+}
+.db-payment-footer a {
+    color: #333;
+    font-weight: 600;
+    text-decoration: underline;
 }
 
 /* ============================================

@@ -35,7 +35,8 @@ DEFAULT_SHEET_NAME = "Website Builder — Leads"
 # When set, all skills append to this single sheet automatically.
 CANONICAL_SHEET_URL = os.getenv("LEADS_SHEET_URL", "")
 
-# Lead schema — columns for the Google Sheet (34 columns)
+# Lead schema — columns for the Google Sheet (42 columns)
+# MUST match COL in server.py and COLUMN_NAMES in _worker.js
 LEAD_COLUMNS = [
     # Metadata (cols 1-3)
     "lead_id",
@@ -60,16 +61,22 @@ LEAD_COLUMNS = [
     "facebook",
     "instagram",
     "linkedin",
-    # Pipeline Status (cols 21-28)
+    # Pipeline Status (cols 21-34)
     "status",
     "domain_option_1",
+    "domain_option_1_purchase",
+    "domain_option_1_price",
     "domain_option_2",
+    "domain_option_2_purchase",
+    "domain_option_2_price",
     "domain_option_3",
+    "domain_option_3_purchase",
+    "domain_option_3_price",
     "website_url",
     "email_sent_date",
     "response_date",
     "notes",
-    # Pipeline Tracking (cols 29-35)
+    # Pipeline Tracking (cols 35-42)
     "draft_url_1",
     "draft_url_2",
     "draft_url_3",
@@ -77,14 +84,15 @@ LEAD_COLUMNS = [
     "chosen_template",
     "next_action",
     "next_action_date",
+    "acquisition_source",
 ]
 
 # Column ranges for color coding (1-indexed)
 METADATA_COLS = (1, 3)       # A-C: light grey
 BUSINESS_COLS = (4, 13)      # D-M: light blue
 CONTACT_COLS = (14, 20)      # N-T: light green
-STATUS_COLS = (21, 28)       # U-AB: light yellow
-TRACKING_COLS = (29, 35)     # AC-AI: light purple
+STATUS_COLS = (21, 34)       # U-AH: light yellow
+TRACKING_COLS = (35, 42)     # AI-AP: light purple
 
 # Status dropdown values
 STATUS_VALUES = [
@@ -207,15 +215,17 @@ def _set_column_widths(worksheet):
             14: 200,  # owner_email
             20: 100,  # status
             21: 200,  # domain_option_1
-            22: 200,  # domain_option_2
-            23: 200,  # domain_option_3
-            24: 200,  # website_url
-            28: 250,  # draft_url_1
-            29: 250,  # draft_url_2
-            30: 250,  # draft_url_3
-            31: 120,  # chosen_template
-            32: 200,  # next_action
-            33: 130,  # next_action_date
+            24: 200,  # domain_option_2
+            27: 200,  # domain_option_3
+            30: 200,  # website_url
+            34: 250,  # draft_url_1
+            35: 250,  # draft_url_2
+            36: 250,  # draft_url_3
+            37: 250,  # draft_url_4
+            38: 120,  # chosen_template
+            39: 200,  # next_action
+            40: 130,  # next_action_date
+            41: 120,  # acquisition_source
         }
 
         for col_idx, width in width_map.items():

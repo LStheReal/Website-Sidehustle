@@ -18,6 +18,7 @@ rm -rf "$DIST/fonts" "$DIST/templates"
 cp dashboard.html "$DIST/onboarding.html"
 cp dashboard.css "$DIST/"
 cp dashboard.js "$DIST/"
+cp loading.lottie "$DIST/"
 
 # Copy fonts
 mkdir -p "$DIST/fonts"
@@ -33,6 +34,173 @@ for tpl in earlydog bia liveblocks loveseen; do
     echo "  Copied template: $tpl"
   fi
 done
+
+# Copy raw templates for worker runtime (AI text + Pexels images fill {{}} at runtime)
+for tpl in earlydog bia liveblocks loveseen; do
+  src="$DIST/templates/$tpl"
+  dest="$DIST/templates-raw/$tpl"
+  if [ -d "$src" ]; then
+    mkdir -p "$dest"
+    cp -r "$src"/* "$dest/"
+  fi
+done
+echo "  Copied raw templates for worker runtime"
+
+# Replace IMAGE placeholders with original asset paths per template
+# (Must happen BEFORE the catch-all below)
+sed -i '' \
+  -e 's|{{IMAGE_HERO}}|assets/images/hero.svg|g' \
+  -e 's|{{IMAGE_SERVICE_1}}|assets/images/section1.svg|g' \
+  -e 's|{{IMAGE_SERVICE_2}}|assets/images/section2.svg|g' \
+  -e 's|{{IMAGE_SERVICE_3}}|assets/images/section3.svg|g' \
+  "$DIST/templates/earlydog/index.html" 2>/dev/null || true
+
+sed -i '' \
+  -e 's|{{IMAGE_HERO}}|assets/images/hero.svg|g' \
+  -e 's|{{IMAGE_SHOWCASE}}|assets/images/showcase.svg|g' \
+  -e 's|{{IMAGE_CTA}}|assets/images/cta.svg|g' \
+  -e 's|{{IMAGE_CONTACT}}|assets/images/contact.svg|g' \
+  "$DIST/templates/bia/index.html" 2>/dev/null || true
+
+sed -i '' \
+  -e 's|{{IMAGE_FEATURE}}|assets/images/feature.svg|g' \
+  -e 's|{{IMAGE_ABOUT}}|assets/images/about.svg|g' \
+  "$DIST/templates/liveblocks/index.html" 2>/dev/null || true
+
+sed -i '' \
+  -e 's|{{IMAGE_HERO}}|assets/images/hero.jpg|g' \
+  -e 's|{{IMAGE_ABOUT}}|assets/images/about.jpg|g' \
+  -e 's|{{IMAGE_GALLERY_1}}|assets/images/gallery1.jpg|g' \
+  -e 's|{{IMAGE_GALLERY_2}}|assets/images/gallery2.jpg|g' \
+  -e 's|{{IMAGE_GALLERY_3}}|assets/images/gallery3.jpg|g' \
+  "$DIST/templates/loveseen/index.html" 2>/dev/null || true
+
+echo "  Replaced IMAGE placeholders with asset paths"
+
+# Replace {{TEXT PLACEHOLDERS}} in template previews with clean demo text
+# (Only in cf-dashboard copies — source templates stay untouched)
+for f in "$DIST"/templates/*/index.html; do
+  sed -i '' \
+    -e 's/{{BUSINESS_NAME_SHORT}}/Ihr Business/g' \
+    -e 's/{{BUSINESS_NAME}}/Ihr Business/g' \
+    -e 's/{{TAGLINE}}/Moderne Website für Ihr Unternehmen/g' \
+    -e 's/{{META_DESCRIPTION}}/Professionelle Website für Schweizer KMU/g' \
+    -e 's/{{HERO_TITLE_LINE1}}/Ihr Partner/g' \
+    -e 's/{{HERO_TITLE_LINE2}}/für Qualität/g' \
+    -e 's/{{HERO_TITLE_LINE3}}/und Vertrauen/g' \
+    -e 's/{{HERO_DESCRIPTION}}/Wir erstellen Ihre professionelle Website — modern, schnell und bezahlbar./g' \
+    -e 's/{{HERO_CTA}}/Mehr erfahren/g' \
+    -e 's/{{HERO_WORD_1}}/Qualität/g' \
+    -e 's/{{HERO_WORD_2}}/Vertrauen/g' \
+    -e 's/{{HERO_WORD_3}}/Erfahrung/g' \
+    -e 's/{{HERO_WORD_4}}/Effizienz/g' \
+    -e 's/{{SECTION_LABEL_HERO}}/Willkommen/g' \
+    -e 's/{{SECTION_LABEL_SERVICES}}/Leistungen/g' \
+    -e 's/{{SECTION_LABEL_ABOUT}}/Über uns/g' \
+    -e 's/{{SECTION_LABEL_FEATURE}}/Highlight/g' \
+    -e 's/{{SERVICES_HEADING}}/Unsere Leistungen/g' \
+    -e 's/{{SERVICES_DESCRIPTION}}/Alles was Ihr Unternehmen braucht./g' \
+    -e 's/{{SERVICES_CTA}}/Kontakt aufnehmen/g' \
+    -e 's/{{SERVICE_1_TITLE}}/Beratung/g' \
+    -e 's/{{SERVICE_1_DESCRIPTION}}/Individuelle Beratung für Ihren Erfolg./g' \
+    -e 's/{{SERVICE_1_CTA}}/Mehr dazu/g' \
+    -e 's/{{SERVICE_2_TITLE}}/Umsetzung/g' \
+    -e 's/{{SERVICE_2_DESCRIPTION}}/Professionelle Umsetzung Ihrer Ideen./g' \
+    -e 's/{{SERVICE_2_CTA}}/Mehr dazu/g' \
+    -e 's/{{SERVICE_3_TITLE}}/Betreuung/g' \
+    -e 's/{{SERVICE_3_DESCRIPTION}}/Langfristige Begleitung und Support./g' \
+    -e 's/{{SERVICE_3_CTA}}/Mehr dazu/g' \
+    -e 's/{{SERVICE_4_TITLE}}/Planung/g' \
+    -e 's/{{SERVICE_4_DESCRIPTION}}/Strukturierte Planung für beste Ergebnisse./g' \
+    -e 's/{{SERVICE_5_TITLE}}/Analyse/g' \
+    -e 's/{{SERVICE_5_DESCRIPTION}}/Genaue Analyse Ihrer Anforderungen./g' \
+    -e 's/{{SERVICE_6_TITLE}}/Optimierung/g' \
+    -e 's/{{SERVICE_6_DESCRIPTION}}/Stetige Verbesserung und Anpassung./g' \
+    -e 's/{{ABOUT_HEADING}}/Über uns/g' \
+    -e 's/{{ABOUT_HEADING_LINE1}}/Qualität und/g' \
+    -e 's/{{ABOUT_HEADING_LINE2}}/Vertrauen/g' \
+    -e 's/{{ABOUT_LEAD}}/Qualität und Vertrauen seit Jahren./g' \
+    -e 's/{{ABOUT_DESCRIPTION}}/Wir sind ein engagiertes Team mit Leidenschaft für erstklassige Arbeit./g' \
+    -e 's/{{ABOUT_CTA}}/Leistungen ansehen/g' \
+    -e 's/{{FEATURE_HEADING}}/Was uns auszeichnet/g' \
+    -e 's/{{FEATURE_DESCRIPTION}}/Persönliche Betreuung und höchste Qualität./g' \
+    -e 's/{{FEATURE_POINT_1}}/Erfahrung/g' \
+    -e 's/{{FEATURE_POINT_2}}/Qualität/g' \
+    -e 's/{{FEATURE_POINT_3}}/Vertrauen/g' \
+    -e 's/{{INTRO_TEXT}}/Willkommen bei uns/g' \
+    -e 's/{{INTRO_DESCRIPTION}}/Ihr Partner für professionelle Dienstleistungen in der Schweiz./g' \
+    -e 's/{{TRUST_LABEL}}/Vertraut von Schweizer KMU/g' \
+    -e 's/{{CTA_BUTTON_PRIMARY}}/Jetzt starten/g' \
+    -e 's/{{CTA_BUTTON_SECONDARY}}/Mehr erfahren/g' \
+    -e 's/{{CTA_DESCRIPTION}}/Bereit für Ihre neue Website?/g' \
+    -e 's/{{CTA_TITLE_LINE1}}/Interesse geweckt?/g' \
+    -e 's/{{CTA_TITLE_LINE2}}/Kontaktieren Sie uns./g' \
+    -e 's/{{CTA_TITLE_LINE3}}//g' \
+    -e 's/{{CTA_HEADING_LINE1}}/Bereit für/g' \
+    -e 's/{{CTA_HEADING_LINE2}}/den nächsten Schritt?/g' \
+    -e 's/{{STATEMENT_LABEL}}/Unser Versprechen/g' \
+    -e 's/{{STATEMENT_LINE1}}/Qualität,/g' \
+    -e 's/{{STATEMENT_LINE2}}/Zuverlässigkeit,/g' \
+    -e 's/{{STATEMENT_LINE3}}/Vertrauen./g' \
+    -e 's/{{STAT_1_NUMBER}}/10+/g' \
+    -e 's/{{STAT_1_LABEL}}/Jahre Erfahrung/g' \
+    -e 's/{{STAT_2_NUMBER}}/200+/g' \
+    -e 's/{{STAT_2_LABEL}}/Zufriedene Kunden/g' \
+    -e 's/{{STAT_3_NUMBER}}/100%/g' \
+    -e 's/{{STAT_3_LABEL}}/Engagement/g' \
+    -e 's/{{STAT_4_NUMBER}}/24h/g' \
+    -e 's/{{STAT_4_LABEL}}/Antwortzeit/g' \
+    -e 's/{{VALUE_1_TITLE}}/Qualität/g' \
+    -e 's/{{VALUE_1_DESCRIPTION}}/Höchste Ansprüche an unsere Arbeit./g' \
+    -e 's/{{VALUE_2_TITLE}}/Vertrauen/g' \
+    -e 's/{{VALUE_2_DESCRIPTION}}/Transparenz und Ehrlichkeit./g' \
+    -e 's/{{VALUE_3_TITLE}}/Erfahrung/g' \
+    -e 's/{{VALUE_3_DESCRIPTION}}/Langjährige Kompetenz./g' \
+    -e 's/{{NAV_CTA}}/Kontakt/g' \
+    -e 's/{{NAV_LINK_1}}/Leistungen/g' \
+    -e 's/{{NAV_LINK_2}}/Über uns/g' \
+    -e 's/{{NAV_LINK_3}}/Kontakt/g' \
+    -e 's/{{NAV_LINK_4}}//g' \
+    -e 's/{{CONTACT_TAGLINE}}/Wir freuen uns auf Sie/g' \
+    -e 's/{{CONTACT_CARD_1_TITLE}}/Rufen Sie uns an/g' \
+    -e 's/{{CONTACT_CARD_1_DESCRIPTION}}/Wir sind für Sie da./g' \
+    -e 's/{{CONTACT_CARD_2_TITLE}}/Schreiben Sie uns/g' \
+    -e 's/{{CONTACT_CARD_2_DESCRIPTION}}/Wir antworten innert 24h./g' \
+    -e 's/{{EMAIL_PLACEHOLDER}}/ihre@email.ch/g' \
+    -e 's/{{CONTACT_LABEL_PHONE}}/Telefon/g' \
+    -e 's/{{CONTACT_LABEL_EMAIL}}/E-Mail/g' \
+    -e 's/{{CONTACT_LABEL_ADDRESS}}/Adresse/g' \
+    -e 's/{{CONTACT_LABEL_HOURS}}/Öffnungszeiten/g' \
+    -e 's/{{GALLERY_LABEL}}/Unsere Arbeiten/g' \
+    -e 's/{{INSTAGRAM_URL}}/#/g' \
+    -e 's/{{INSTAGRAM_HANDLE}}/ihrbusiness/g' \
+    -e 's/{{FOOTER_COL_1_TITLE}}/Navigation/g' \
+    -e 's/{{FOOTER_COL_1_LINK_1}}/Startseite/g' \
+    -e 's/{{FOOTER_COL_1_LINK_2}}/Leistungen/g' \
+    -e 's/{{FOOTER_COL_1_LINK_3}}/Über uns/g' \
+    -e 's/{{FOOTER_COL_2_TITLE}}/Rechtliches/g' \
+    -e 's/{{FOOTER_COL_2_LINK_1}}/Datenschutz/g' \
+    -e 's/{{FOOTER_COL_2_LINK_2}}/AGB/g' \
+    -e 's/{{FOOTER_COL_2_LINK_3}}/Impressum/g' \
+    -e 's/{{FOOTER_PRIVACY}}/Datenschutz/g' \
+    -e 's/{{FOOTER_TERMS}}/AGB/g' \
+    -e 's/{{FOOTER_YEAR}}/2026/g' \
+    -e 's/{{PHONE_SHORT}}/+41 XX XXX XX XX/g' \
+    -e 's/{{PHONE}}/+41 XX XXX XX XX/g' \
+    -e 's/{{EMAIL}}/info@ihrbusiness.ch/g' \
+    -e 's/{{ADDRESS}}/Musterstrasse 1, 8000 Zürich/g' \
+    -e 's/{{OPENING_HOURS}}/Mo–Fr 08:00–18:00/g' \
+    -e 's/{{[A-Z_0-9]*}}//g' \
+    "$f"
+done
+echo "  Replaced template placeholders with demo text"
+
+# Fix iframe paths: .claude/skills/build-website-<tpl>/template/ → templates/<tpl>/
+sed -i '' 's|\.claude/skills/build-website-earlydog/template/|templates/earlydog/|g' "$DIST/onboarding.html"
+sed -i '' 's|\.claude/skills/build-website-bia/template/|templates/bia/|g' "$DIST/onboarding.html"
+sed -i '' 's|\.claude/skills/build-website-liveblocks/template/|templates/liveblocks/|g' "$DIST/onboarding.html"
+sed -i '' 's|\.claude/skills/build-website-loveseen/template/|templates/loveseen/|g' "$DIST/onboarding.html"
+echo "  Fixed iframe paths for CF deployment"
 
 # Create _headers for caching
 cat > "$DIST/_headers" << 'EOF'

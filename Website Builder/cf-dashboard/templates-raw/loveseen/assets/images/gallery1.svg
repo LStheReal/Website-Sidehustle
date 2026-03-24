@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="g1Bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#E8DDD5"/>
+      <stop offset="50%" stop-color="#DDD0C6"/>
+      <stop offset="100%" stop-color="#D4C4B8"/>
+    </linearGradient>
+    <radialGradient id="g1Glow" cx="0.4" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#F0E6DE" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+    <filter id="g1B1"><feGaussianBlur stdDeviation="35"/></filter>
+    <filter id="g1B2"><feGaussianBlur stdDeviation="15"/></filter>
+    <filter id="g1B3"><feGaussianBlur stdDeviation="6"/></filter>
+  </defs>
+
+  <!-- Warm neutral base -->
+  <rect width="800" height="600" fill="url(#g1Bg)"/>
+  <rect width="800" height="600" fill="url(#g1Glow)"/>
+
+  <!-- Large abstract shapes — terracotta, clay, warm earth tones -->
+  <ellipse cx="300" cy="300" rx="280" ry="250" fill="#C49878" opacity="0.2" filter="url(#g1B1)"/>
+  <ellipse cx="550" cy="350" rx="200" ry="200" fill="#B88868" opacity="0.18" filter="url(#g1B1)"/>
+
+  <!-- Overlapping circles — like stones or petals -->
+  <circle cx="250" cy="250" r="140" fill="#D4A888" opacity="0.15" filter="url(#g1B2)"/>
+  <circle cx="400" cy="320" r="120" fill="#C8968A" opacity="0.12" filter="url(#g1B2)"/>
+  <circle cx="550" cy="260" r="100" fill="#D0A490" opacity="0.14" filter="url(#g1B2)"/>
+
+  <!-- Rose/blush accent shapes -->
+  <ellipse cx="350" cy="280" rx="80" ry="60" fill="#D4909A" opacity="0.1" filter="url(#g1B2)"/>
+  <ellipse cx="500" cy="380" rx="60" ry="50" fill="#C88890" opacity="0.08" filter="url(#g1B2)"/>
+
+  <!-- Flowing curves — like fabric or water -->
+  <path d="M0,400 Q200,300 400,380 Q600,460 800,340" stroke="#B8906C" stroke-width="60" fill="none" opacity="0.06" filter="url(#g1B2)" stroke-linecap="round"/>
+  <path d="M0,480 Q250,380 500,450 Q700,520 800,420" stroke="#A88060" stroke-width="40" fill="none" opacity="0.05" filter="url(#g1B3)" stroke-linecap="round"/>
+
+  <!-- Scattered rose petals — abstract dots -->
+  <g opacity="0.15">
+    <ellipse cx="180" cy="180" rx="15" ry="9" fill="#D09098" transform="rotate(25 180 180)" filter="url(#g1B3)"/>
+    <ellipse cx="600" cy="200" rx="12" ry="7" fill="#C88890" transform="rotate(-15 600 200)" filter="url(#g1B3)"/>
+    <ellipse cx="450" cy="480" rx="18" ry="10" fill="#D4949A" transform="rotate(40 450 480)" filter="url(#g1B3)"/>
+    <ellipse cx="150" cy="450" rx="14" ry="8" fill="#C88088" transform="rotate(-30 150 450)" filter="url(#g1B3)"/>
+    <ellipse cx="680" cy="420" rx="11" ry="6" fill="#D09098" transform="rotate(15 680 420)" filter="url(#g1B3)"/>
+  </g>
+
+  <!-- Gold dust particles -->
+  <g opacity="0.1">
+    <circle cx="200" cy="200" r="2" fill="#C8A068"/>
+    <circle cx="350" cy="150" r="1.5" fill="#D0A870"/>
+    <circle cx="500" cy="180" r="2" fill="#C8A068"/>
+    <circle cx="300" cy="400" r="1.5" fill="#D0A870"/>
+    <circle cx="600" cy="350" r="2" fill="#C8A068"/>
+    <circle cx="150" cy="350" r="1.5" fill="#D0A870"/>
+    <circle cx="650" cy="150" r="1.5" fill="#C8A068"/>
+  </g>
+</svg>

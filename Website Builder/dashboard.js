@@ -18,10 +18,10 @@
 
     /* ---------- Fallback preview URLs (API now always returns real preview URLs) ---------- */
     var fallbackPreviewUrls = {
-        earlydog: '/api/preview/_fallback/earlydog',
-        bia: '/api/preview/_fallback/bia',
-        liveblocks: '/api/preview/_fallback/liveblocks',
-        loveseen: '/api/preview/_fallback/loveseen',
+        earlydog: 'templates/earlydog/index.html',
+        bia: 'templates/bia/index.html',
+        liveblocks: 'templates/liveblocks/index.html',
+        loveseen: 'templates/loveseen/index.html',
     };
 
     /* ---------- State ---------- */
@@ -291,8 +291,9 @@
         var hasImages = state.logoFile || state.imageFiles.length;
 
         cards.forEach(function (card, i) {
-            // Only generate the selected template (saves 3x AI calls + image uploads)
-            if (card.dataset.tpl !== state.template) return;
+            // On initial load (no template selected yet), update ALL cards
+            // After selection, only update the selected template (saves 3x AI calls + image uploads)
+            if (state.template && card.dataset.tpl !== state.template) return;
 
             var iframe = card.querySelector('.db-preview-iframe');
             if (!iframe) return;
@@ -306,6 +307,8 @@
                 var params = new URLSearchParams();
                 if (state.customizations.description) params.set('description', state.customizations.description);
                 if (state.customizations.values) params.set('values', state.customizations.values);
+                if (state.customizations.phone) params.set('phone', state.customizations.phone);
+                if (state.customizations.address) params.set('address', state.customizations.address);
                 var sep = url.includes('?') ? '&' : '?';
                 iframe.src = params.toString() ? url + sep + params.toString() : url;
             }
@@ -329,6 +332,8 @@
         formData.append('template', templateKey);
         formData.append('description', state.customizations.description || '');
         formData.append('values', state.customizations.values || '');
+        if (state.customizations.phone) formData.append('phone', state.customizations.phone);
+        if (state.customizations.address) formData.append('address', state.customizations.address);
         if (state.logoFile) formData.append('logo', state.logoFile);
         state.imageFiles.forEach(function (f) { formData.append('images', f); });
 
@@ -400,6 +405,21 @@
         html += '<textarea class="db-input db-textarea" id="f_values" name="values" rows="3" placeholder="z.B. 20 Jahre Erfahrung, 500+ zufriedene Kunden, Familienunternehmen, kostenlose Beratung"' + reqAttr + '></textarea>';
         html += '</div>';
 
+        // Contact info (only for no-code users)
+        if (state.isNoCode) {
+            html += '<div class="db-input-group">';
+            html += '<label class="db-label" for="f_phone">TELEFONNUMMER</label>';
+            html += '<p class="db-field-hint">Wird auf deiner Website angezeigt, damit Kunden dich erreichen k\u00f6nnen.</p>';
+            html += '<input class="db-input" type="tel" id="f_phone" name="phone" placeholder="z.B. +41 44 123 45 67">';
+            html += '</div>';
+
+            html += '<div class="db-input-group">';
+            html += '<label class="db-label" for="f_address">ADRESSE</label>';
+            html += '<p class="db-field-hint">Firmenadresse f\u00fcr den Kontaktbereich deiner Website.</p>';
+            html += '<input class="db-input" type="text" id="f_address" name="address" placeholder="z.B. Bahnhofstrasse 10, 8001 Z\u00fcrich">';
+            html += '</div>';
+        }
+
         // Logo upload
         html += '<div class="db-input-group">';
         html += '<label class="db-label">LOGO</label>';
@@ -409,48 +429,86 @@
         html += '</label>';
         html += '</div>';
 
-        // General images
+        // General images — show existing + add more
         html += '<div class="db-input-group">';
         html += '<label class="db-label">BILDER</label>';
         html += '<p class="db-field-hint">Lade Fotos hoch (Team, Gesch\u00e4ft, Projekte). Die KI entscheidet, welche wo am besten passen.</p>';
+        html += '<div id="imageList" class="db-image-list"></div>';
         html += '<label class="db-file-upload" id="fileLabel_images">';
         html += '<input type="file" accept="image/*" multiple style="display:none" onchange="window.__fileChanged(this,\'images\')">';
-        html += 'Bilder ausw\u00e4hlen\u2026';
+        html += '+ Bilder hinzuf\u00fcgen';
         html += '</label>';
         html += '</div>';
 
         container.innerHTML = html;
+
+        // Render existing images if returning to step 3
+        setTimeout(function () { renderImageList(); }, 0);
+
+        // Show existing logo name if set
+        if (state.logoFile) {
+            var logoLabel = document.getElementById('fileLabel_logo');
+            if (logoLabel) {
+                logoLabel.classList.add('has-file');
+                logoLabel.childNodes[logoLabel.childNodes.length - 1].textContent = ' ' + state.logoFile.name;
+            }
+        }
     }
 
     // File upload label update + store file references in state
     window.__fileChanged = function (input, key) {
         var label = document.getElementById('fileLabel_' + key);
         if (input.files.length) {
-            label.classList.add('has-file');
-            var text = input.files.length === 1 ? input.files[0].name : input.files.length + ' Dateien ausgew\u00e4hlt';
-            label.childNodes[label.childNodes.length - 1].textContent = ' ' + text;
-
-            // Store file references for order submission
             if (key === 'logo') {
                 state.logoFile = input.files[0];
-                state.tempLogoUrl = '';  // Reset cached URL so re-upload happens
+                state.tempLogoUrl = '';
+                label.classList.add('has-file');
+                label.childNodes[label.childNodes.length - 1].textContent = ' ' + input.files[0].name;
             } else if (key === 'images') {
-                state.imageFiles = Array.from(input.files);
-                state.tempImageUrls = [];  // Reset cached URLs so re-upload happens
+                // Accumulate images (don't replace)
+                var newFiles = Array.from(input.files);
+                state.imageFiles = state.imageFiles.concat(newFiles);
+                state.tempImageUrls = [];
+                renderImageList();
             }
         }
+    };
+
+    function renderImageList() {
+        var container = document.getElementById('imageList');
+        if (!container) return;
+        if (!state.imageFiles.length) {
+            container.innerHTML = '';
+            return;
+        }
+        var html = '';
+        state.imageFiles.forEach(function (f, i) {
+            html += '<div class="db-image-item">';
+            html += '<span class="db-image-name">' + f.name + '</span>';
+            html += '<button type="button" class="db-image-remove" onclick="window.__removeImage(' + i + ')">\u00d7</button>';
+            html += '</div>';
+        });
+        container.innerHTML = html;
+    }
+
+    window.__removeImage = function (idx) {
+        state.imageFiles.splice(idx, 1);
+        state.tempImageUrls = [];
+        renderImageList();
     };
 
     function collectFormData() {
         var c = state.customizations;
         c.description = getVal('description');
         c.values = getVal('values');
-        // Collect business name for no-code users
+        // Collect business name + contact info for no-code users
         if (state.isNoCode) {
             var bizName = getVal('business_name');
             if (bizName && state.leadData) {
                 state.leadData.business_name = bizName;
             }
+            c.phone = getVal('phone');
+            c.address = getVal('address');
         }
     }
 
@@ -464,7 +522,7 @@
         return !!(c.description || c.values);
     }
 
-    function onStep3Next() {
+    async function onStep3Next() {
         collectFormData();
 
         // For no-code users: description and values are required
@@ -490,50 +548,60 @@
             }
         }
 
-        // Generate domain suggestions from business name
+        // Show generating overlay
+        generatingOverlay.classList.add('visible');
+
+        // Generate domain suggestions (async — checks real availability)
         if (!state.domainSuggestions.length) {
-            generateDomainSuggestions();
+            await generateDomainSuggestions();
         }
 
         if (hasAnyCustomization() || state.logoFile || state.imageFiles.length) {
-            // Show generating overlay while AI generates content + places images
-            generatingOverlay.classList.add('visible');
-
             // For no-code users: update lead data on server with business info before generating
-            var updatePromise = Promise.resolve();
             if (state.isNoCode && state.leadData.business_name) {
-                updatePromise = apiPost('/lead/' + state.leadId + '/update', {
-                    business_name: state.leadData.business_name,
-                    description: state.customizations.description,
-                    values: state.customizations.values,
-                }).catch(function (e) { console.warn('Lead update failed:', e); });
+                try {
+                    var updateData = {
+                        business_name: state.leadData.business_name,
+                        description: state.customizations.description,
+                        values: state.customizations.values,
+                        phone: state.customizations.phone || '',
+                        address: state.customizations.address || '',
+                        chosen_template: state.template || '',
+                    };
+                    // Include domain suggestions if already generated
+                    if (state.domainSuggestions.length) {
+                        state.domainSuggestions.forEach(function (d, i) {
+                            if (i < 3) updateData['domain_option_' + (i + 1)] = d.domain;
+                        });
+                    }
+                    await apiPost('/lead/' + state.leadId + '/update', updateData);
+                } catch (e) { console.warn('Lead update failed:', e); }
             }
 
-            updatePromise.then(function () {
-                // Start updating only the selected template iframe
-                updateTemplateIframes();
+            // Start updating only the selected template iframe
+            updateTemplateIframes();
 
-                // Wait for the selected template iframe to load, then proceed
-                var done = false;
-                var selectedCard = document.querySelector('.db-tpl-card[data-tpl="' + state.template + '"]');
-                var selectedIframe = selectedCard ? selectedCard.querySelector('.db-preview-iframe') : null;
+            // Wait for the selected template iframe to load, then proceed
+            var done = false;
+            var selectedCard = document.querySelector('.db-tpl-card[data-tpl="' + state.template + '"]');
+            var selectedIframe = selectedCard ? selectedCard.querySelector('.db-preview-iframe') : null;
 
-                var proceed = function () {
-                    if (done) return;
-                    done = true;
-                    generatingOverlay.classList.remove('visible');
-                    renderDomainCards();
-                    goToStep(4);
-                };
+            var proceed = function () {
+                if (done) return;
+                done = true;
+                generatingOverlay.classList.remove('visible');
+                renderDomainCards();
+                goToStep(4);
+            };
 
-                if (selectedIframe) {
-                    selectedIframe.addEventListener('load', proceed, { once: true });
-                }
+            if (selectedIframe) {
+                selectedIframe.addEventListener('load', proceed, { once: true });
+            }
 
-                // Timeout fallback: proceed after 90s max (AI + image processing can take time)
-                setTimeout(proceed, 90000);
-            });
+            // Timeout fallback: proceed after 90s max
+            setTimeout(proceed, 90000);
         } else {
+            generatingOverlay.classList.remove('visible');
             renderDomainCards();
             goToStep(4);
         }
@@ -549,24 +617,57 @@
     }
 
     /* ---------- Step 4: Domain suggestions ---------- */
-    function generateDomainSuggestions() {
-        // Fallback: generate from business name or use placeholder
-        var name = (state.leadData && state.leadData.business_name) || 'meinbusiness';
-        var clean = name.toLowerCase()
+    function toAsciiDomain(name) {
+        return name.toLowerCase()
             .replace(/\u00e4/g, 'ae').replace(/\u00f6/g, 'oe').replace(/\u00fc/g, 'ue')
             .replace(/\u00e9|\u00e8|\u00ea/g, 'e')
-            .replace(/[^a-z0-9]/g, '')
+            .replace(/[\s_]+/g, '-')
+            .replace(/[^a-z0-9-]/g, '')
+            .replace(/-{2,}/g, '-')
+            .replace(/^-|-$/g, '')
             .substring(0, 30);
+    }
 
+    async function generateDomainSuggestions() {
+        var name = (state.leadData && state.leadData.business_name) || 'meinbusiness';
+        var clean = toAsciiDomain(name);
         if (!clean) clean = 'meinbusiness';
 
-        var suggestions = [
-            { domain: clean + '.ch', tld: '.ch', available: true },
-            { domain: clean + '.com', tld: '.com', available: true },
-            { domain: clean + '-online.ch', tld: '.ch', available: true },
+        // Generate more candidates to find available ones
+        var candidates = [
+            clean + '.ch',
+            clean + '.com',
+            clean + '-online.ch',
+            clean + '-web.ch',
+            clean + '-schweiz.ch',
+            'mein-' + clean + '.ch',
         ];
 
-        state.domainSuggestions = suggestions;
+        // Check availability via API
+        try {
+            var resp = await fetch('/api/check-domains', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domains: candidates }),
+            });
+            if (resp.ok) {
+                var data = await resp.json();
+                // Only show available domains (max 3)
+                var available = data.results.filter(function (d) { return d.available === true; });
+                if (available.length > 0) {
+                    state.domainSuggestions = available.slice(0, 3);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.warn('Domain check failed:', e);
+        }
+
+        // Fallback if API fails: show candidates but mark as unchecked
+        state.domainSuggestions = candidates.slice(0, 3).map(function (d) {
+            var tld = '.' + d.split('.').pop();
+            return { domain: d, tld: tld, available: null };
+        });
     }
 
     function renderDomainCards() {
@@ -574,13 +675,15 @@
         var html = '';
 
         state.domainSuggestions.forEach(function (d, i) {
+            var availClass = d.available === true ? ' available' : '';
+            var availText = d.available === true ? 'Verf\u00fcgbar' : (d.available === false ? 'Nicht verf\u00fcgbar' : 'Wird gepr\u00fcft\u2026');
             html += '<div class="db-domain-card" data-domain-idx="' + i + '" tabindex="0">';
             html += '<div class="db-radio"><div class="db-radio-dot"></div></div>';
             html += '<div class="db-domain-info">';
             html += '<div class="db-domain-name">' + d.domain + '</div>';
             html += '<div class="db-domain-meta">';
             html += '<span class="db-tld-badge">' + d.tld + '</span>';
-            html += '<span class="db-avail"><span class="db-avail-dot' + (d.available ? ' available' : '') + '"></span>' + (d.available ? 'Verf\u00fcgbar' : 'Nicht verf\u00fcgbar') + '</span>';
+            html += '<span class="db-avail"><span class="db-avail-dot' + availClass + '"></span>' + availText + '</span>';
             html += '</div></div>';
             html += '</div>';
         });
@@ -677,19 +780,35 @@
         if (!state.agreedToTerms) return;
 
         var orderBtn = document.getElementById('orderBtn');
-        var originalText = orderBtn.innerHTML;
         orderBtn.disabled = true;
-        orderBtn.textContent = 'Website wird erstellt & deployed\u2026';
 
-        // Build FormData for multipart upload
+        // Show Stripe payment screen IMMEDIATELY (don't wait for build/deploy)
+        steps[5].classList.remove('active');
+        document.querySelector('.db-header').style.display = 'none';
+        document.querySelector('.db-main').style.display = 'none';
+        var paymentEl = document.getElementById('payment');
+        paymentEl.style.display = '';
+        paymentEl.classList.add('active');
+        window.scrollTo(0, 0);
+
+        // Inject Stripe pricing table (script already preloaded in <head>)
+        var sc = document.getElementById('stripe-container');
+        if (sc && !sc.querySelector('stripe-pricing-table')) {
+            var pt = document.createElement('stripe-pricing-table');
+            pt.setAttribute('pricing-table-id', 'prctbl_1TD5B6Co7odLqWDi7TBPULXA');
+            pt.setAttribute('publishable-key', 'pk_live_51TCbOwCo7odLqWDi0dVxF2JY6ZckAroieNNOFaZTZ9VMzvlba6ksmQJvt6khUr9eSvW9S2L212dy8FghdgIHisJD00KYBWc53J');
+            sc.appendChild(pt);
+        }
+
+        // Fire build/deploy in the background — don't block the payment screen
         var formData = new FormData();
         formData.append('chosen_template', state.template || '');
         formData.append('description', state.customizations.description || '');
         formData.append('values', state.customizations.values || '');
         formData.append('selected_domain', state.domain || '');
         formData.append('agreed_to_terms', 'true');
-
-        // Attach files
+        if (state.customizations.phone) formData.append('phone', state.customizations.phone);
+        if (state.customizations.address) formData.append('address', state.customizations.address);
         if (state.logoFile) {
             formData.append('logo', state.logoFile);
         }
@@ -697,24 +816,13 @@
             formData.append('images', f);
         });
 
-        try {
-            var result = await apiPostOrder(state.leadId, formData);
-
-            // Success — show Stripe payment screen
-            steps[5].classList.remove('active');
-            document.getElementById('payment').classList.add('active');
-            document.querySelector('.db-progress').style.display = 'none';
-
-            // Store live URL for later (after payment)
+        apiPostOrder(state.leadId, formData).then(function (result) {
             if (result && result.live_url) {
                 window._liveUrl = result.live_url;
             }
-        } catch (err) {
-            // Show error and re-enable button
-            alert('Fehler: ' + err.message);
-            orderBtn.disabled = false;
-            orderBtn.innerHTML = originalText;
-        }
+        }).catch(function (err) {
+            console.error('Order background error:', err);
+        });
     }
 
     /* ---------- Step navigation via progress dots ---------- */

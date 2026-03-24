@@ -105,6 +105,8 @@ def flatten_lead(gmaps_data: dict, contacts: dict, search_query: str) -> dict:
         "email_sent_date": "",
         "response_date": "",
         "notes": "",
+        # Acquisition tracking
+        "acquisition_source": "outreach",
     }
 
 

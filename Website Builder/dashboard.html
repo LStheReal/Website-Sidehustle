@@ -9,6 +9,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script type="module" src="https://unpkg.com/@dotlottie/player-component@latest/dist/dotlottie-player.mjs"></script>
+    <link rel="preconnect" href="https://js.stripe.com">
+    <script async src="https://js.stripe.com/v3/pricing-table.js"></script>
 </head>
 <body>
 
@@ -215,12 +218,22 @@
 
 <!-- GENERATING OVERLAY -->
 <div class="db-generating" id="generating">
-    <div class="db-spinner"></div>
+    <dotlottie-player src="/loading.lottie" autoplay loop class="db-lottie-lg"></dotlottie-player>
     <div class="db-generating-text">Deine Website wird generiert&hellip;</div>
 </div>
 
+<!-- PAYMENT SCREEN (Stripe) — full screen white -->
+<div class="db-payment-screen" id="payment" style="display:none;">
+    <div class="db-payment-inner">
+        <div id="stripe-container"></div>
+        <div class="db-payment-footer">
+            <p>Fragen? <a href="mailto:info@meine-kmu.ch">info@meine-kmu.ch</a></p>
+        </div>
+    </div>
+</div>
+
 <!-- SUCCESS SCREEN -->
-<div class="db-success" id="success">
+<div class="db-success" id="success" style="display:none;">
     <div class="db-success-check">&#10003;</div>
     <h1 class="db-success-heading">Vielen Dank!</h1>
     <p class="db-success-text">Deine Website wird innerhalb von 48 Stunden live geschaltet. Du erh&auml;ltst eine Best&auml;tigung per E-Mail.</p>
@@ -238,7 +251,7 @@
         <button class="db-btn db-btn-ghost db-preview-close" onclick="dbClosePreview()">&larr; Zur&uuml;ck zur Bestellung</button>
     </div>
     <div class="db-preview-loading" id="previewLoading">
-        <div class="db-spinner"></div>
+        <dotlottie-player src="/loading.lottie" autoplay loop class="db-lottie-sm"></dotlottie-player>
         <p>Website wird erstellt&hellip;</p>
     </div>
     <iframe class="db-preview-overlay-iframe" id="previewOverlayIframe" src="about:blank"></iframe>
@@ -276,12 +289,7 @@ var _mkModalContent = {
     +'</div>';
   },
   impressumModal: function() {
-    return '<h2 style="font-size:1.5rem;font-weight:800;color:#fff;margin:0 0 1.5rem;">Impressum</h2>'
-    +'<p style="font-size:.95rem;color:#ccc;margin:0 0 .3rem;"><strong>meine-kmu.ch</strong></p>'
-    +'<p style="font-size:.95rem;color:#888;margin:0 0 .3rem;">Louise Schul\u00e9 &amp; Mael Dubach</p>'
-    +'<p style="font-size:.95rem;color:#888;margin:0 0 1rem;">Z\u00fcrich, Schweiz</p>'
-    +'<p style="font-size:.95rem;color:#888;margin:0 0 .3rem;">E-Mail: <a href="mailto:info@meine-kmu.ch" style="color:var(--green,#a6ff00);text-decoration:none;">info@meine-kmu.ch</a></p>'
-    +'<p style="margin-top:1.5rem;color:#888;font-size:.9rem;">Ein Projekt von Sch\u00fcl\u00e9 Beratung GmbH \u2014 betrieben, gebaut und Idee von Louise Sch\u00fcl\u00e9 und Mael Dubach.</p>';
+    return '<p style="color:#888;font-size:.9rem;">Ein Projekt von Sch\u00fcl\u00e9 Beratung \u2014 ausgef\u00fchrt und betreut von Louise Sch\u00fcl\u00e9 und Mael Dubach.</p>';
   },
   faqModal: function() {
     var qs = [

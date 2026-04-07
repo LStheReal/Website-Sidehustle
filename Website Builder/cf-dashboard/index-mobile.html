@@ -6,12 +6,12 @@
     <title>
       meine-kmu
     </title>
-    <meta content="Moderne Websites für kleine Unternehmen in der Schweiz." name="description"/>
+    <meta content="Moderne Websiten für kleine Unternehmen in der Schweiz." name="description"/>
     <meta content="meine-kmu" property="og:title"/>
     <meta content="Mehr Vertrauen, mehr Sichtbarkeit und ein besserer erster Eindruck für Ihr Unternehmen." property="og:description"/>
     <meta content="https://cdn.prod.website-files.com/664eea9e5a26d00faaa2716e/66abf1a7396e571a87dea156_open_graph.avif" property="og:image"/>
     <meta content="meine-kmu" property="twitter:title"/>
-    <meta content="Moderne Websites für kleine Unternehmen in der Schweiz." property="twitter:description"/>
+    <meta content="Moderne Websiten für kleine Unternehmen in der Schweiz." property="twitter:description"/>
     <meta content="https://cdn.prod.website-files.com/664eea9e5a26d00faaa2716e/66abf1a7396e571a87dea156_open_graph.avif" property="twitter:image"/>
     <meta property="og:type" content="website"/>
     <meta content="summary_large_image" name="twitter:card"/>
@@ -235,7 +235,7 @@ document.addEventListener('keydown', function(e) { if (e.key === 'Escape') close
                 </h1>
                 <div class="global-subline-div">
                   <div class="hero-headline-s">
-                    Moderne Websites für kleine Unternehmen
+                    Moderne Websiten für kleine Unternehmen
                   </div>
                 </div>
               </div>
@@ -649,7 +649,7 @@ document.addEventListener('keydown', function(e) { if (e.key === 'Escape') close
                       Mael Dubach
                     </div>
                     <p class="about-bio">
-                      Ich bin Mael, 16 Jahre alt und interessiere mich besonders für Technologie, AI und das Entwickeln eigener Projekte. Ich programmiere gerne und habe
+                      Ich bin Mael und interessiere mich besonders für Technologie, AI und das Entwickeln eigener Projekte. Ich programmiere gerne und habe
                       <a href="https://setflow.fit" target="_blank" rel="noopener noreferrer">
                         setflow.fit
                       </a>
@@ -662,7 +662,7 @@ document.addEventListener('keydown', function(e) { if (e.key === 'Escape') close
                       Louise Schülé
                     </div>
                     <p class="about-bio">
-                      Ich heisse Louise, bin 16 Jahre alt und entwickle gerne eigene Ideen im Tech-Bereich. Mein Projekt
+                      Ich heisse Louise und entwickle gerne eigene Ideen im Tech-Bereich. Mein Projekt
                       <a href="https://studyahead.ch" target="_blank" rel="noopener noreferrer">
                         studyahead.ch
                       </a>
@@ -1557,11 +1557,6 @@ a, button, [role="button"], input[type="submit"] { cursor: pointer !important; }
   min-width: 12.8rem;
   padding-left: 1.45rem !important;
   padding-right: 1.45rem !important;
-  transition: transform 0.2s ease;
-}
-.btn-div .primary-btn:hover,
-.btn-div .secondary-btn.in-nav:hover {
-  transform: scale(1.06);
 }
 
 .btn-div .btn-txt-container {
@@ -1575,6 +1570,18 @@ a, button, [role="button"], input[type="submit"] { cursor: pointer !important; }
 .btn-div .secondary-btn-txt {
   white-space: nowrap;
   line-height: 1;
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+.btn-div .primary-btn:hover .primary-btn-txt,
+.btn-div .secondary-btn.in-nav:hover .secondary-btn-txt {
+  transform: scale(1.15);
+}
+.btn-div .primary-btn,
+.btn-div .secondary-btn.in-nav,
+.btn-div .primary-btn *,
+.btn-div .secondary-btn.in-nav * {
+  cursor: pointer !important;
 }
 
 .cta-contact-bar {
@@ -2742,11 +2749,6 @@ a, button, [role="button"], input[type="submit"] { cursor: pointer !important; }
   min-width: 12.8rem;
   padding-left: 1.45rem !important;
   padding-right: 1.45rem !important;
-  transition: transform 0.2s ease;
-}
-.btn-div .primary-btn:hover,
-.btn-div .secondary-btn.in-nav:hover {
-  transform: scale(1.06);
 }
 
 body, body * { cursor: auto !important; }
@@ -2763,6 +2765,18 @@ a, button, [role="button"], input[type="submit"] { cursor: pointer !important; }
 .btn-div .secondary-btn-txt {
   white-space: nowrap;
   line-height: 1;
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+.btn-div .primary-btn:hover .primary-btn-txt,
+.btn-div .secondary-btn.in-nav:hover .secondary-btn-txt {
+  transform: scale(1.15);
+}
+.btn-div .primary-btn,
+.btn-div .secondary-btn.in-nav,
+.btn-div .primary-btn *,
+.btn-div .secondary-btn.in-nav * {
+  cursor: pointer !important;
 }
 
 .cta-contact-bar {

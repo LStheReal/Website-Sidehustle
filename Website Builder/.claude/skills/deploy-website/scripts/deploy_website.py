@@ -16,6 +16,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import unicodedata
 from pathlib import Path
 
@@ -84,60 +85,69 @@ def check_wrangler_auth() -> bool:
         return False
 
 
-def create_project(project_name: str) -> bool:
-    """Create a Cloudflare Pages project if it doesn't exist."""
-    print(f"  Creating project '{project_name}'...")
-    result = subprocess.run(
-        ["npx", "wrangler", "pages", "project", "create", project_name, "--production-branch", "main"],
-        capture_output=True, text=True, timeout=30,
-        cwd=str(PROJECT_ROOT),
-    )
-    if result.returncode == 0:
-        print(f"  Project '{project_name}' created.")
-        return True
-    elif "already exists" in result.stderr.lower() or "already exists" in result.stdout.lower():
-        print(f"  Project '{project_name}' already exists.")
-        return True
-    else:
-        # Print the error but don't fail — deploy might still work
-        print(f"  Note: {result.stderr.strip() or result.stdout.strip()}")
-        return True
+def create_project(project_name: str, max_retries: int = 3) -> bool:
+    """Create a Cloudflare Pages project if it doesn't exist. Retries on rate limit."""
+    for attempt in range(1, max_retries + 1):
+        print(f"  Creating project '{project_name}' (attempt {attempt}/{max_retries})...")
+        result = subprocess.run(
+            ["npx", "wrangler", "pages", "project", "create", project_name, "--production-branch", "main"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(PROJECT_ROOT),
+        )
+        if result.returncode == 0:
+            print(f"  Project '{project_name}' created.")
+            return True
+        output = (result.stderr + " " + result.stdout).lower()
+        if "already exists" in output:
+            print(f"  Project '{project_name}' already exists.")
+            return True
+        if attempt < max_retries:
+            wait = 30 * attempt  # 30s, 60s between retries
+            print(f"  Rate limited. Waiting {wait}s before retry...")
+            time.sleep(wait)
+        else:
+            print(f"  Note: {result.stderr.strip() or result.stdout.strip()}")
+            return True  # still try deploy
 
 
-def deploy_site(site_dir: Path, project_name: str) -> str | None:
-    """Deploy the site to Cloudflare Pages. Returns the live URL or None."""
-    print(f"  Deploying {site_dir} to project '{project_name}'...")
-    result = subprocess.run(
-        ["npx", "wrangler", "pages", "deploy", str(site_dir), "--project-name", project_name],
-        capture_output=True, text=True, timeout=120,
-        cwd=str(PROJECT_ROOT),
-    )
+def deploy_site(site_dir: Path, project_name: str, max_retries: int = 3) -> str | None:
+    """Deploy the site to Cloudflare Pages. Returns the live URL or None. Retries on failure."""
+    for attempt in range(1, max_retries + 1):
+        print(f"  Deploying {site_dir} to project '{project_name}' (attempt {attempt})...")
+        result = subprocess.run(
+            ["npx", "wrangler", "pages", "deploy", str(site_dir), "--project-name", project_name],
+            capture_output=True, text=True, timeout=120,
+            cwd=str(PROJECT_ROOT),
+        )
 
-    output = result.stdout + "\n" + result.stderr
+        output = result.stdout + "\n" + result.stderr
 
-    if result.returncode != 0:
-        print(f"Error: Deployment failed.", file=sys.stderr)
-        print(result.stderr, file=sys.stderr)
-        return None
+        if result.returncode != 0:
+            if attempt < max_retries:
+                wait = 30 * attempt  # 30s, 60s between retries
+                print(f"  Deploy failed (attempt {attempt}). Waiting {wait}s before retry...")
+                time.sleep(wait)
+                continue
+            print(f"Error: Deployment failed after {max_retries} attempts.", file=sys.stderr)
+            print(result.stderr, file=sys.stderr)
+            return None
 
-    # Extract the URL from wrangler output
-    # Wrangler prints something like: "✨ Deployment complete! Take a peek over at https://xxx.pages.dev"
-    url = None
-    for line in output.splitlines():
-        # Look for URLs in the output
-        match = re.search(r"https://[a-z0-9-]+\.pages\.dev", line, re.IGNORECASE)
-        if match:
-            url = match.group(0)
-        # Also check for the deployment URL pattern
-        match2 = re.search(r"https://[a-z0-9-]+\.[a-z0-9-]+\.pages\.dev", line, re.IGNORECASE)
-        if match2:
-            url = match2.group(0)
+        # Success — extract the URL from wrangler output
+        url = None
+        for line in output.splitlines():
+            match = re.search(r"https://[a-z0-9-]+\.pages\.dev", line, re.IGNORECASE)
+            if match:
+                url = match.group(0)
+            match2 = re.search(r"https://[a-z0-9-]+\.[a-z0-9-]+\.pages\.dev", line, re.IGNORECASE)
+            if match2:
+                url = match2.group(0)
 
-    if not url:
-        # Fallback: construct the URL from project name
-        url = f"https://{project_name}.pages.dev"
+        if not url:
+            url = f"https://{project_name}.pages.dev"
 
-    return url
+        return url
+
+    return None  # should not reach here
 
 
 # --- Custom domain instructions ---

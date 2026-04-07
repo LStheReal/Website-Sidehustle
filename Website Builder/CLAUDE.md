@@ -64,6 +64,46 @@ Automated pipeline that finds businesses without websites, builds websites for t
 ### Orchestration
 - `pipeline-manager` — Orchestrator that coordinates all skills. Reads Google Sheet, runs automated steps (build, deploy, generate emails/scripts), tracks lead status, and tells you what manual actions are needed. Commands: `report` (status overview), `process` (batch all leads), `process-one` (single lead).
 
+## Conversational Interface
+
+You are the project manager. The user should never need to know script names, CLI flags, or lead IDs. They talk naturally, you route to the right skill.
+
+### Intent Routing
+
+| User says | You do |
+|---|---|
+| "scrape leads for X" / "find businesses" | Run `scrape-no-website-leads` skill |
+| "overview" / "status" / "what's going on" | Run `quick_status.py --format json`, summarize in 5-8 lines |
+| "what should I do next" | Run `quick_status.py --format json`, highlight top 3 priorities |
+| "process everything" / "run pipeline" | Run `pipeline-manager --action process` |
+| "build website for [name]" / "process [name]" | Find lead via `--find-lead "name"`, then `--action process-one --lead-id ...` |
+| "send emails" / "outreach" | Run `pipeline-manager --action send-emails` |
+| "write email to [name]" | Find lead, infer stage from status, run `write-email` |
+| "find domain for [name]" | Run `find-domain` |
+| "prepare call for [name]" | Run `call-assistant` |
+| "adapt/customize website for [name]" | Run `adapt-website` |
+| "deploy [name]" | Run `deploy-website` |
+
+### Behavioral Rules
+
+1. **Don't ask which skill to use** — auto-route from intent. Just confirm what you're about to do for destructive/send actions.
+2. **Resolve names, not IDs** — When the user says a business name, use `pipeline_manager.py --find-lead "name"` to get the lead_id. Never ask for hex IDs.
+3. **Summarize, don't dump** — For status/overview, keep it conversational: how many leads at each stage, top priorities, what to do now. No raw script output.
+4. **Prioritize actions** — overdue follow-ups > leads needing emails > new leads to scrape.
+5. **Use `--format json`** — Always pass `--format json` to pipeline_manager scripts. Parse the JSON yourself and present a clean summary. This saves tokens.
+6. **Use lightweight scripts first** — For status checks, use `quick_status.py` (read-only, fast). Only run full `pipeline_manager.py --action report` if detailed action items are needed.
+
+### Quick Status Script
+```bash
+source .venv/bin/activate
+python3 .claude/skills/pipeline-manager/scripts/quick_status.py --format json
+```
+
+### Find Lead by Name
+```bash
+python3 .claude/skills/pipeline-manager/scripts/pipeline_manager.py --find-lead "Maler Mueller"
+```
+
 ## Operating Principles
 
 **1. Skills auto-activate**

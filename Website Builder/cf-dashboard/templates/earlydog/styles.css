@@ -1,0 +1,507 @@
+/* === EarlyDog Template — Clean Service Business === */
+
+/* Reset */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+/* Variables */
+:root {
+    --color-bg: #FFF9F0;
+    --color-text: #000609;
+    --color-blue: #0A65DB;
+    --color-red: #FF491E;
+    --color-yellow: #FFD00D;
+    --color-pink: #FBC3D4;
+    --color-cream: #FFF9F0;
+    --color-white: #FFFFFF;
+
+    --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+    --container-max: 1200px;
+    --container-padding: 2rem;
+}
+
+/* Base */
+html {
+    font-size: 16px;
+    line-height: 1.5;
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    font-family: var(--font-family);
+    color: var(--color-text);
+    background-color: var(--color-bg);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+h1, h2, h3 {
+    line-height: 1.1;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+h1 {
+    font-size: clamp(2.4rem, 6vw, 5rem);
+}
+
+h2 {
+    font-size: clamp(1.8rem, 4.5vw, 3.8rem);
+}
+
+h3 {
+    font-size: clamp(1.4rem, 3vw, 2.2rem);
+}
+
+p {
+    font-size: 1.05rem;
+    line-height: 1.65;
+    color: var(--color-text);
+    opacity: 0.85;
+}
+
+.text-blue {
+    color: var(--color-blue);
+}
+
+/* Container */
+.container {
+    max-width: var(--container-max);
+    margin: 0 auto;
+    padding: 0 var(--container-padding);
+}
+
+/* ============================
+   Navigation
+   ============================ */
+.nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 1.5rem 2rem;
+    pointer-events: none;
+}
+
+.nav > * {
+    pointer-events: auto;
+}
+
+/* Desktop: vertical text logo on left side */
+.nav-logo a {
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--color-text);
+    transition: color 0.2s;
+    display: inline-block;
+}
+
+.nav-logo a:hover {
+    color: var(--color-blue);
+}
+
+.nav-cta {
+    text-align: right;
+}
+
+.nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text);
+    transition: color 0.2s;
+}
+
+.nav-link:hover {
+    color: var(--color-blue);
+}
+
+.nav-link svg {
+    color: var(--color-blue);
+    flex-shrink: 0;
+}
+
+/* ============================
+   Hero Section
+   ============================ */
+.hero {
+    padding: 8rem 0 4rem;
+    padding-left: 3.5rem; /* space for vertical nav */
+}
+
+.hero-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 3rem;
+    align-items: center;
+}
+
+.hero-text h1 {
+    margin-bottom: 1.5rem;
+}
+
+.hero-description {
+    font-size: 1.15rem;
+    max-width: 480px;
+    margin-top: 2rem;
+}
+
+.hero-image img {
+    width: 100%;
+    max-width: 480px;
+    margin-left: auto;
+}
+
+/* ============================
+   Feature Sections
+   ============================ */
+.feature-section {
+    padding: 4rem 0;
+    padding-left: 3.5rem; /* space for vertical nav */
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    align-items: center;
+}
+
+.feature-grid-reverse .feature-image {
+    order: 2;
+}
+
+.feature-grid-reverse .feature-text {
+    order: 1;
+}
+
+.feature-image img {
+    width: 100%;
+    max-width: 420px;
+}
+
+.feature-image {
+    display: flex;
+    justify-content: center;
+}
+
+.feature-grid-reverse .feature-image {
+    justify-content: flex-end;
+}
+
+.feature-text h3 {
+    margin-bottom: 0.75rem;
+}
+
+.feature-text p {
+    margin-bottom: 2rem;
+    max-width: 480px;
+}
+
+/* ============================
+   Buttons
+   ============================ */
+.btn-outline {
+    display: inline-block;
+    padding: 0.75rem 1.75rem;
+    border: 2px solid var(--color-text);
+    border-radius: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--color-text);
+    transition: all 0.2s ease;
+    text-align: center;
+    cursor: pointer;
+}
+
+.btn-outline:hover {
+    background-color: var(--color-text);
+    color: var(--color-bg);
+}
+
+.btn-primary {
+    display: inline-block;
+    padding: 0.85rem 2rem;
+    background-color: var(--color-text);
+    color: var(--color-bg);
+    border: 2px solid var(--color-text);
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    text-align: center;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    background-color: transparent;
+    color: var(--color-text);
+}
+
+/* ============================
+   CTA Section
+   ============================ */
+.cta-section {
+    padding: 2rem 0 6rem;
+    text-align: center;
+}
+
+.divider {
+    border: none;
+    border-top: 1px solid rgba(0, 6, 9, 0.15);
+    margin-bottom: 5rem;
+}
+
+.cta-section h2 {
+    margin-bottom: 2rem;
+}
+
+/* ============================
+   Footer
+   ============================ */
+.footer {
+    background-color: var(--color-blue);
+    color: var(--color-white);
+    padding: 3rem 0 2rem;
+}
+
+.footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    justify-content: center;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.footer-links a {
+    font-size: 0.9rem;
+    font-weight: 500;
+    opacity: 0.9;
+    transition: opacity 0.2s;
+}
+
+.footer-links a:hover {
+    opacity: 1;
+}
+
+.footer-bottom {
+    display: flex;
+    justify-content: space-between;
+    padding-top: 1.5rem;
+    font-size: 0.8rem;
+    opacity: 0.7;
+}
+
+/* ============================
+   TABLET — 769px to 1024px
+   ============================ */
+@media (max-width: 1024px) {
+    .hero {
+        padding-left: 2.5rem;
+    }
+
+    .feature-section {
+        padding-left: 2.5rem;
+    }
+
+    .hero-grid {
+        gap: 2rem;
+    }
+
+    .feature-grid {
+        gap: 2.5rem;
+    }
+
+    .feature-image img {
+        max-width: 340px;
+    }
+
+    .hero-image img {
+        max-width: 380px;
+    }
+}
+
+/* ============================
+   MOBILE — 768px and below
+   ============================ */
+@media (max-width: 768px) {
+    :root {
+        --container-padding: 1.5rem;
+    }
+
+    /* Nav: horizontal logo on mobile */
+    .nav {
+        padding: 1.25rem 1.5rem;
+        align-items: center;
+    }
+
+    .nav-logo a {
+        writing-mode: horizontal-tb;
+        text-orientation: initial;
+        font-size: 0.8rem;
+        letter-spacing: 0.12em;
+    }
+
+    /* Hero: stack vertically */
+    .hero {
+        padding: 5rem 0 2.5rem;
+        padding-left: 0;
+    }
+
+    .hero-grid {
+        grid-template-columns: 1fr;
+        gap: 2.5rem;
+    }
+
+    .hero-image {
+        display: flex;
+        justify-content: center;
+    }
+
+    .hero-image img {
+        max-width: 320px;
+        margin: 0 auto;
+    }
+
+    .hero-description {
+        font-size: 1.05rem;
+    }
+
+    /* Feature sections: stack vertically */
+    .feature-section {
+        padding: 3rem 0;
+        padding-left: 0;
+    }
+
+    .feature-grid {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+    }
+
+    /* Reset order on mobile — always image first */
+    .feature-grid-reverse .feature-image {
+        order: 0;
+    }
+
+    .feature-grid-reverse .feature-text {
+        order: 0;
+    }
+
+    .feature-image {
+        justify-content: center;
+    }
+
+    .feature-grid-reverse .feature-image {
+        justify-content: center;
+    }
+
+    .feature-image img {
+        max-width: 280px;
+        margin: 0 auto;
+    }
+
+    .feature-text {
+        text-align: center;
+    }
+
+    .feature-text p {
+        max-width: 100%;
+    }
+
+    .feature-text .btn-outline {
+        margin: 0 auto;
+    }
+
+    /* CTA */
+    .cta-section {
+        padding: 1rem 0 4rem;
+    }
+
+    .divider {
+        margin-bottom: 3rem;
+    }
+
+    /* Footer */
+    .footer-links {
+        gap: 1.25rem;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .footer-bottom {
+        flex-direction: column;
+        gap: 0.5rem;
+        text-align: center;
+    }
+}
+
+/* ============================
+   SMALL MOBILE — 480px and below
+   ============================ */
+@media (max-width: 480px) {
+    :root {
+        --container-padding: 1rem;
+    }
+
+    .nav {
+        padding: 1rem;
+    }
+
+    .hero {
+        padding-top: 4.5rem;
+    }
+
+    .hero-image img {
+        max-width: 260px;
+    }
+
+    .feature-image img {
+        max-width: 220px;
+    }
+
+    p {
+        font-size: 0.95rem;
+    }
+
+    .btn-outline,
+    .btn-primary {
+        padding: 0.7rem 1.5rem;
+        font-size: 0.85rem;
+        width: 100%;
+        max-width: 280px;
+    }
+
+    .footer {
+        padding: 2rem 0 1.5rem;
+    }
+
+    .footer-links {
+        gap: 1rem;
+    }
+}

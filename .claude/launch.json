@@ -22,7 +22,7 @@
     },
     {
       "name": "cf-landing",
-      "runtimeExecutable": "python3",
+      "runtimeExecutable": "Website Builder/.venv/bin/python3",
       "runtimeArgs": ["-m", "http.server", "8091", "--directory", "Website Builder/cf-dashboard"],
       "port": 8091
     },
@@ -31,6 +31,18 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8092", "--directory", "Website Builder"],
       "port": 8092
+    },
+    {
+      "name": "loveseen-cf",
+      "runtimeExecutable": "Website Builder/.venv/bin/python3",
+      "runtimeArgs": ["-m", "http.server", "8093", "--directory", "Website Builder/cf-dashboard/templates/loveseen"],
+      "port": 8093
+    },
+    {
+      "name": "liveblocks-cf",
+      "runtimeExecutable": "Website Builder/.venv/bin/python3",
+      "runtimeArgs": ["-m", "http.server", "8094", "--directory", "Website Builder/cf-dashboard/templates/liveblocks"],
+      "port": 8094
     }
   ]
 }

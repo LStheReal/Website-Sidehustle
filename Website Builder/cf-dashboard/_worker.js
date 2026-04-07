@@ -15,8 +15,15 @@ const COLUMN_NAMES = [
   "linkedin","status","domain_option_1","domain_option_1_purchase","domain_option_1_price",
   "domain_option_2","domain_option_2_purchase","domain_option_2_price","domain_option_3",
   "domain_option_3_purchase","domain_option_3_price","website_url","email_sent_date",
-  "response_date","notes","draft_url_1","draft_url_2","draft_url_3","draft_url_4",
+  "response_date","notes","draft_url_1_earlydog","draft_url_2_bia","draft_url_3_liveblocks","draft_url_4_loveseen",
   "chosen_template","next_action","next_action_date","acquisition_source",
+  "form_business_name","form_description","form_values","form_phone","form_address",
+  "url_earlydog","url_bia","url_liveblocks","url_loveseen",
+  "html_earlydog_drive_id","html_bia_drive_id","html_liveblocks_drive_id","html_loveseen_drive_id",
+  "generation_status",
+  "last_dashboard_visit","welcome_email_sent","last_reminder_sent",
+  "reminder_count","subscription_status","stripe_payment_date",
+  "live_email_sent","selected_domain",
 ];
 
 const TEMPLATE_KEYS = ["earlydog", "bia", "liveblocks", "loveseen"];
@@ -27,8 +34,14 @@ const TEMPLATE_KEYS = ["earlydog", "bia", "liveblocks", "loveseen"];
 const previewCache = new Map();
 const PREVIEW_CACHE_TTL = 30 * 60 * 1000;
 
-// ── Google OAuth ──────────────────────────────────────────
+// ── Google OAuth (with caching to avoid rate limits) ─────
+let _cachedToken = null;
+let _cachedTokenExp = 0;
+
 async function getAccessToken(env) {
+  // Return cached token if still valid (4-minute TTL)
+  if (_cachedToken && Date.now() < _cachedTokenExp) return _cachedToken;
+
   const creds = JSON.parse(env.GOOGLE_CREDENTIALS_JSON);
   const token = JSON.parse(env.GOOGLE_TOKEN_JSON);
   const installed = creds.installed || creds.web;
@@ -44,6 +57,9 @@ async function getAccessToken(env) {
   });
   const data = await resp.json();
   if (!data.access_token) throw new Error("Google token refresh failed: " + JSON.stringify(data));
+
+  _cachedToken = data.access_token;
+  _cachedTokenExp = Date.now() + 240000; // 4 minutes
   return data.access_token;
 }
 
@@ -121,11 +137,13 @@ async function uploadFileToDrive(accessToken, folderId, fileBytes, fileName, mim
   const combined = new Uint8Array(totalLen);
   let offset = 0;
   for (const p of parts) { combined.set(p, offset); offset += p.byteLength; }
-  await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
+  const uploadResp = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": `multipart/related; boundary=${boundary}` },
     body: combined,
   });
+  const uploadData = await uploadResp.json();
+  return uploadData.id || null;
 }
 
 // ── AI Content ────────────────────────────────────────────
@@ -219,7 +237,7 @@ const TEMPLATE_DEFAULTS = {
     SERVICE_2_TITLE: "Ausführung", SERVICE_2_DESCRIPTION: "Termintreue und präzise Umsetzung.",
     SERVICE_3_TITLE: "Feinschliff", SERVICE_3_DESCRIPTION: "Kontrolle aller Details für ein sauberes Resultat.",
     SERVICES_CTA: "Unverbindlich anfragen",
-    GALLERY_LABEL: "Einblicke", INSTAGRAM_HANDLE: "ateliernord", INSTAGRAM_URL: "#",
+    GALLERY_LABEL: "Einblicke", INSTAGRAM_HANDLE: "", INSTAGRAM_URL: "",
     CONTACT_TAGLINE: "Schreiben oder rufen Sie uns an.", EMAIL_PLACEHOLDER: "Deine E-Mail-Adresse",
     CONTACT_LABEL_PHONE: "Telefon", CONTACT_LABEL_EMAIL: "E-Mail", CONTACT_LABEL_ADDRESS: "Adresse", CONTACT_LABEL_HOURS: "Öffnungszeiten",
     PHONE: "+41 44 123 45 67", EMAIL: "hallo@ateliernord.ch", ADDRESS: "Langstrasse 12, 8004 Zürich", OPENING_HOURS: "Di–Sa 9–18 Uhr",
@@ -322,43 +340,52 @@ async function enrichWithAI(env, data, templateKey) {
 Firma-Info:
 ${context}
 
-Generiere ein JSON-Objekt mit diesen Feldern. Jeder Text soll einzigartig sein, zur Firma passen und NICHT einfach die Beschreibung wiederholen. Schreibe natürlich und professionell auf Deutsch (Schweizer Stil, kein ß).
+WICHTIGE REGELN:
+1. Die Texte vom Kunden (Beschreibung und Werte/Besonderheiten) sind die WICHTIGSTE Grundlage. Verwende sie als Basis für alle Texte. Du darfst umformulieren und professionell aufbereiten, aber der Inhalt MUSS dem entsprechen, was der Kunde geschrieben hat.
+2. Erfinde KEINE Dienstleistungen, die der Kunde nicht erwähnt hat. Wenn der Kunde nur 1-2 Leistungen nennt, fülle die restlichen SERVICE-Felder mit "".
+3. Erfinde KEINE konkreten Zahlen oder Statistiken (z.B. "500+ Kunden", "20 Jahre"). Verwende NUR Zahlen, die der Kunde explizit genannt hat. Wenn keine Zahlen genannt: verwende beschreibende Wörter wie "Persönlich", "Regional", "Zuverlässig" für STAT-Felder.
+4. Erfinde KEINE Social-Media-Handles, Instagram-Namen, URLs oder E-Mail-Adressen.
+5. Wenn der Kunde wenig Info gegeben hat: schreibe kürzere, allgemeinere Texte. Weniger Text ist besser als falscher Text. Setze Felder auf "" wenn du keinen passenden Inhalt hast.
+6. Schreibe natürlich und professionell auf Deutsch (Schweizer Stil, kein ß). Verwende immer echte Umlaute (ä, ö, ü, Ä, Ö, Ü) — NIEMALS ae, oe, ue schreiben.
+
+Generiere ein JSON-Objekt mit diesen Feldern:
 
 {
-  "TAGLINE": "kurzer Slogan, max 8 Wörter",
+  "TAGLINE": "kurzer Slogan basierend auf Kundenbeschreibung, max 8 Wörter",
   "HERO_TITLE_LINE1": "erste Zeile Haupttitel, 2-4 Wörter",
   "HERO_TITLE_LINE2": "zweite Zeile Haupttitel, 2-4 Wörter",
   "HERO_TITLE_LINE3": "dritte Zeile oder leer",
-  "HERO_DESCRIPTION": "1-2 Sätze, was die Firma bietet, max 150 Zeichen",
+  "HERO_DESCRIPTION": "1-2 Sätze basierend auf Kundenbeschreibung, max 150 Zeichen",
   "ABOUT_HEADING": "Überschrift Über-uns-Bereich, 2-4 Wörter",
-  "ABOUT_LEAD": "1 Satz Einleitung zum Über-uns-Text, max 100 Zeichen",
-  "ABOUT_DESCRIPTION": "2-3 Sätze über die Firma, Werte und Arbeitsweise",
+  "ABOUT_LEAD": "1 Satz Einleitung basierend auf Kundenbeschreibung, max 100 Zeichen",
+  "ABOUT_DESCRIPTION": "2-3 Sätze über die Firma — NUR basierend auf Kundeninfo",
   "INTRO_TEXT": "kurze Einleitung, 3-5 Wörter",
-  "INTRO_DESCRIPTION": "1 Satz Firmenbeschreibung, max 120 Zeichen",
+  "INTRO_DESCRIPTION": "1 Satz Firmenbeschreibung basierend auf Kundentext, max 120 Zeichen",
   "FEATURE_HEADING": "Überschrift Vorteile-Bereich, 2-4 Wörter",
   "FEATURE_DESCRIPTION": "1 Satz warum diese Firma, max 100 Zeichen",
-  "FEATURE_POINT_1": "Vorteil 1, 2-3 Wörter",
-  "FEATURE_POINT_2": "Vorteil 2, 2-3 Wörter",
-  "FEATURE_POINT_3": "Vorteil 3, 2-3 Wörter",
-  "SERVICE_1_TITLE": "Leistung 1 Name",
-  "SERVICE_1_DESCRIPTION": "1 Satz zu Leistung 1",
-  "SERVICE_2_TITLE": "Leistung 2 Name",
-  "SERVICE_2_DESCRIPTION": "1 Satz zu Leistung 2",
-  "SERVICE_3_TITLE": "Leistung 3 Name",
-  "SERVICE_3_DESCRIPTION": "1 Satz zu Leistung 3",
+  "FEATURE_POINT_1": "Vorteil aus Kundenwerten, 2-3 Wörter, oder leer",
+  "FEATURE_POINT_2": "Vorteil aus Kundenwerten, 2-3 Wörter, oder leer",
+  "FEATURE_POINT_3": "Vorteil aus Kundenwerten, 2-3 Wörter, oder leer",
+  "SERVICE_1_TITLE": "Leistung aus Kundenbeschreibung, oder leer",
+  "SERVICE_1_DESCRIPTION": "1 Satz zu Leistung 1, oder leer",
+  "SERVICE_2_TITLE": "Leistung aus Kundenbeschreibung, oder leer",
+  "SERVICE_2_DESCRIPTION": "1 Satz zu Leistung 2, oder leer",
+  "SERVICE_3_TITLE": "Leistung aus Kundenbeschreibung, oder leer",
+  "SERVICE_3_DESCRIPTION": "1 Satz zu Leistung 3, oder leer",
   "CTA_DESCRIPTION": "Handlungsaufforderung, 1 Satz",
   "CTA_TITLE_LINE1": "CTA Titel Zeile 1, 2-3 Wörter",
   "CTA_TITLE_LINE2": "CTA Titel Zeile 2, 2-3 Wörter",
-  "VALUE_1_TITLE": "Wert 1, 1-2 Wörter",
-  "VALUE_1_DESCRIPTION": "kurze Beschreibung Wert 1",
-  "VALUE_2_TITLE": "Wert 2, 1-2 Wörter",
-  "VALUE_2_DESCRIPTION": "kurze Beschreibung Wert 2",
-  "VALUE_3_TITLE": "Wert 3, 1-2 Wörter",
-  "VALUE_3_DESCRIPTION": "kurze Beschreibung Wert 3",
+  "VALUE_1_TITLE": "Wert aus Kundeninfo, 1-2 Wörter, oder leer",
+  "VALUE_1_DESCRIPTION": "kurze Beschreibung basierend auf Kundentext, oder leer",
+  "VALUE_2_TITLE": "Wert aus Kundeninfo, 1-2 Wörter, oder leer",
+  "VALUE_2_DESCRIPTION": "kurze Beschreibung basierend auf Kundentext, oder leer",
+  "VALUE_3_TITLE": "Wert aus Kundeninfo, 1-2 Wörter, oder leer",
+  "VALUE_3_DESCRIPTION": "kurze Beschreibung basierend auf Kundentext, oder leer",
   "STATEMENT_LINE1": "Statement Zeile 1, 2-4 Wörter",
   "STATEMENT_LINE2": "Statement Zeile 2, 2-4 Wörter",
   "STATEMENT_LINE3": "Statement Zeile 3, 2-4 Wörter",
-  "META_DESCRIPTION": "SEO-Beschreibung, max 155 Zeichen",
+  "META_DESCRIPTION": "SEO-Beschreibung basierend auf Kundentext, max 155 Zeichen",
+  "INSTAGRAM_HANDLE": "NUR wenn vom Kunden angegeben, sonst leer",
   "CATEGORY": "Branche der Firma als ein Wort auf Englisch, z.B. painter, hairdresser, restaurant, fitness, dentist, lawyer, bakery, plumber, architect, photographer, florist — wähle das passendste"
 }
 
@@ -389,12 +416,11 @@ Antworte NUR mit dem JSON-Objekt, kein anderer Text.`;
 }
 
 // ── Merge lead data with template defaults + Pexels images ──
-async function mergeWithDefaults(env, templateKey, leadData) {
+async function mergeWithDefaults(env, templateKey, leadData, quickMode = false) {
   const defaults = TEMPLATE_DEFAULTS[templateKey] || {};
   const merged = { ...defaults };
 
   // Override defaults with lead data (non-empty values only)
-  // Skip _description and _values context fields — they're for AI only
   for (const [key, value] of Object.entries(leadData)) {
     if (key.startsWith("_")) continue;
     if (value !== null && value !== undefined && value !== "") {
@@ -402,24 +428,34 @@ async function mergeWithDefaults(env, templateKey, leadData) {
     }
   }
 
+  // Quick mode: skip AI + Pexels (used for step 3 thumbnail previews)
+  if (quickMode) {
+    if (!merged.META_DESCRIPTION) {
+      const name = merged.BUSINESS_NAME || "";
+      const tagline = merged.TAGLINE || "";
+      merged.META_DESCRIPTION = tagline ? `${name} — ${tagline}` : name;
+    }
+    return merged;
+  }
+
   // AI text enrichment — generates unique copy based on business info
-  // AI values override template defaults for ALL text fields
-  // Also returns CATEGORY which is used for Pexels image search
   const aiText = await enrichWithAI(env, { ...merged, _description: leadData._description || "", _values: leadData._values || "" }, templateKey);
   let aiCategory = "";
   for (const [key, value] of Object.entries(aiText)) {
     if (key === "CATEGORY") {
       aiCategory = String(value);
-      continue; // Don't put CATEGORY into the HTML placeholders
+      continue;
     }
-    if (value && !key.startsWith("IMAGE_")) {
-      merged[key] = String(value);
+    if (!key.startsWith("IMAGE_")) {
+      // Allow AI to return empty strings to intentionally clear defaults
+      // (e.g. SERVICE_3 when business only has 2 services, or INSTAGRAM_HANDLE)
+      if (value !== null && value !== undefined) {
+        merged[key] = String(value);
+      }
     }
   }
-  // Store AI category on merged so callers can write it back to the sheet
   merged._aiCategory = aiCategory;
 
-  // Auto-generate META_DESCRIPTION if AI didn't provide one
   if (!merged.META_DESCRIPTION) {
     const name = merged.BUSINESS_NAME || "";
     const tagline = merged.TAGLINE || "";
@@ -427,11 +463,9 @@ async function mergeWithDefaults(env, templateKey, leadData) {
   }
 
   // Fetch Pexels images for IMAGE_* slots not explicitly set by user uploads
-  // Skip Pexels when there's no real business context (e.g. step-2 fallback preview)
   const hasBusinessContext = !!(leadData._description || leadData._values || leadData.category || (leadData.BUSINESS_NAME && leadData.BUSINESS_NAME !== ""));
   const slotMap = IMAGE_SLOT_MAP[templateKey] || {};
   if (hasBusinessContext) {
-    // Use AI-determined category for better Pexels results, fall back to lead data
     if (aiCategory) merged.category = aiCategory;
     const userProvidedImages = {};
     for (const key of Object.keys(slotMap)) {
@@ -542,7 +576,7 @@ async function generateAIContent(env, lead, templateKey, customizations) {
       headers: { "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001", max_tokens: 2500,
-        system: "Du bist ein professioneller Website-Texter f\u00fcr Schweizer KMUs. Deutsch, modern, pr\u00e4gnant. Hero-Titel: max 3-4 W\u00f6rter. BUSINESS_NAME_SHORT: erstes Wort + Punkt. Stats: '15+', '500+'. Services: branchenspezifisch. NUR JSON.",
+        system: "Du bist ein professioneller Website-Texter f\u00fcr Schweizer KMUs. Deutsch, modern, pr\u00e4gnant. Hero-Titel: max 3-4 W\u00f6rter. BUSINESS_NAME_SHORT: erstes Wort + Punkt. Stats: '15+', '500+'. Services: branchenspezifisch. Verwende immer echte Umlaute (\u00e4, \u00f6, \u00fc, \u00c4, \u00d6, \u00dc) \u2014 NIEMALS ae, oe, ue schreiben. NUR JSON.",
         messages: [{ role: "user", content: `Gesch\u00e4ft: ${lead.business_name}\nBranche: ${lead.category}\nStadt: ${lead.city}\nBeschreibung: ${customizations.description || ""}\nWerte: ${customizations.values || ""}\n\nJSON mit Schl\u00fcsseln:\n${JSON.stringify(aiKeys)}` }],
       }),
     });
@@ -613,7 +647,7 @@ function jsonResp(data, status = 200) {
 }
 
 // ── Route Handlers ────────────────────────────────────────
-async function handleGetLead(leadId, env) {
+async function handleGetLead(leadId, env, ctx) {
   if (!leadId || leadId.length > 50)
     return jsonResp({ error: "Ung\u00fcltiges Format. Pr\u00fcfe die E-Mail mit deinem Code." }, 400);
   let accessToken, sheetData;
@@ -623,10 +657,14 @@ async function handleGetLead(leadId, env) {
   const lead = findLead(sheetData, leadId);
   if (!lead) return jsonResp({ error: "Code nicht gefunden. Pr\u00fcfe die E-Mail." }, 404);
 
+  // Track dashboard visit (fire-and-forget)
+  if (ctx) ctx.waitUntil(updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, { last_dashboard_visit: new Date().toISOString() }).catch(() => {}));
+
+  const draftSuffixes = ["1_earlydog", "2_bia", "3_liveblocks", "4_loveseen"];
   const previews = [];
-  for (let i = 1; i <= 4; i++) {
-    let url = (lead[`draft_url_${i}`] || "").trim();
-    if (!url || !(url.startsWith("http") || url.startsWith("/"))) url = `/api/preview/${leadId}/${TEMPLATE_KEYS[i-1]}`;
+  for (let i = 0; i < 4; i++) {
+    let url = (lead[`draft_url_${draftSuffixes[i]}`] || "").trim();
+    if (!url || !(url.startsWith("http") || url.startsWith("/"))) url = `/api/preview/${leadId}/${TEMPLATE_KEYS[i]}`;
     previews.push(url);
   }
 
@@ -648,7 +686,13 @@ async function handleGetLead(leadId, env) {
 
   return jsonResp({ lead_id: leadId, business_name: lead.business_name, category: lead.category, city: lead.city, phone: lead.phone,
     owner_email: lead.owner_email, owner_name: lead.owner_name, address: lead.address, status: lead.status, previews, domains,
-    chosen_template: lead.chosen_template, notes: lead.notes });
+    chosen_template: lead.chosen_template, notes: lead.notes, acquisition_source: lead.acquisition_source,
+    form_business_name: lead.form_business_name, form_description: lead.form_description,
+    form_values: lead.form_values, form_phone: lead.form_phone, form_address: lead.form_address,
+    url_earlydog: lead.url_earlydog, url_bia: lead.url_bia, url_liveblocks: lead.url_liveblocks, url_loveseen: lead.url_loveseen,
+    generation_status: lead.generation_status,
+    html_earlydog_drive_id: lead.html_earlydog_drive_id, html_bia_drive_id: lead.html_bia_drive_id,
+    html_liveblocks_drive_id: lead.html_liveblocks_drive_id, html_loveseen_drive_id: lead.html_loveseen_drive_id });
 }
 
 // ── Append a new row to the sheet ────────────────────────
@@ -734,6 +778,9 @@ async function handleRegister(request, env) {
 
   try { await appendRow(accessToken, env.LEADS_SHEET_ID, row); }
   catch (e) { console.error("Append error:", e); return jsonResp({ error: "Registrierung fehlgeschlagen." }, 500); }
+
+  // Welcome email is sent AFTER all 4 websites are generated (in handleGenerateAll step 5)
+  // so the user gets the email with preview screenshots included
 
   return jsonResp({
     lead_id: leadId,
@@ -846,25 +893,15 @@ async function handleOrder(leadId, request, env) {
     console.error("Skipping deploy: CF_API_TOKEN or CF_ACCOUNT_ID not set");
   }
 
-  // 4. Send emails (don't block on failure)
-  const leadEmail = lead.owner_email || lead.emails || "";
-  const purchaseLink = domainPurchaseLink(selectedDomain, lead.domain_option_1_purchase || "");
-  const cfDomainLink = projectName ? cloudflareDomainLink(projectName) : "";
-  try {
-    await sendInternalNotification(env, leadId, lead.business_name || leadId, leadEmail, liveUrl || "(deploy fehlgeschlagen)", selectedDomain, purchaseLink, cfDomainLink);
-  } catch (e) { console.error("Internal email error:", e); }
-  try {
-    await sendCustomerConfirmation(env, lead.owner_name || "", lead.business_name || leadId, leadEmail, selectedDomain);
-  } catch (e) { console.error("Customer email error:", e); }
-
-  // 5. Update Google Sheet
+  // 4. Update Google Sheet with order data (emails sent by Stripe webhook after payment)
   const now = new Date().toISOString();
   const updates = {
     chosen_template: chosenTemplate,
     notes: JSON.stringify({ order_date: now, description, values, selected_domain: selectedDomain, drive_folder: driveFolderUrl, project_name: projectName }),
     status: liveUrl ? "website_created" : "website_creating",
-    next_action: liveUrl ? "CONNECT DOMAIN" : "DEPLOY MANUALLY",
+    next_action: "AWAITING PAYMENT",
     next_action_date: now.slice(0,10),
+    selected_domain: selectedDomain,
   };
   if (selectedDomain) updates.domain_option_1 = selectedDomain;
   if (liveUrl) updates.website_url = liveUrl;
@@ -873,10 +910,14 @@ async function handleOrder(leadId, request, env) {
   try { await updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, updates); }
   catch (e) { console.error("Sheet update error:", e); }
 
-  return jsonResp({ success: true, message: "Bestellung erfolgreich!", drive_folder: driveFolderUrl, live_url: liveUrl || null, project_name: projectName || null });
+  // 5. Emails are sent by the Stripe webhook after payment confirmation.
+  // The frontend shows the Stripe pricing table with client-reference-id=leadId.
+  // When payment completes → webhook fires → order confirmation + internal notification sent.
+
+  return jsonResp({ success: true, message: "Bestellung vorbereitet. Zahlung wird erwartet.", drive_folder: driveFolderUrl, live_url: liveUrl || null, project_name: projectName || null });
 }
 
-async function handlePreview(leadId, templateKey, request, env) {
+async function handlePreview(leadId, templateKey, request, env, ctx) {
   if (!TEMPLATE_KEYS.includes(templateKey)) return new Response("Template not found", { status: 404 });
   const templateDir = `templates/${templateKey}`;
   // Use raw templates (with {{PLACEHOLDER}} patterns) for runtime filling
@@ -904,8 +945,9 @@ async function handlePreview(leadId, templateKey, request, env) {
   const fakeLead = { business_name: url.searchParams.get("business_name") || "" };
   const placeholderData = leadToPlaceholderData(lead || fakeLead, cust);
 
-  // Merge with template defaults + Pexels images
-  const merged = await mergeWithDefaults(env, templateKey, placeholderData);
+  // Merge with template defaults (quick mode skips AI + Pexels for fast previews)
+  const quickMode = url.searchParams.get("quick") === "true";
+  const merged = await mergeWithDefaults(env, templateKey, placeholderData, quickMode);
 
   for (const [key, value] of Object.entries(merged)) html = html.replaceAll(`{{${key}}}`, value);
   html = html.replace(/\{\{[A-Z_0-9]+\}\}/g, "");
@@ -916,6 +958,36 @@ async function handlePreview(leadId, templateKey, request, env) {
 
   // Fix relative image paths (for fallback SVG/JPG assets when Pexels didn't fill them)
   html = html.replace(/src="assets\//g, `src="/${templateDir}/assets/`);
+
+  // Background deploy to CF Pages — only for full (non-quick) previews
+  if (!quickMode && ctx && leadId !== "_fallback" && lead && !lead[`url_${templateKey}`] && env.CF_API_TOKEN && env.CF_ACCOUNT_ID) {
+    const previewHtml = html; // capture for background
+    const rowIdx = lead._row_idx;
+    const businessName = lead.form_business_name || lead.business_name || "";
+    ctx.waitUntil((async () => {
+      try {
+        let deployHtml = previewHtml;
+        // Inline CSS so deployed page is self-contained
+        try {
+          const cssUrl = new URL(`/${templateDir}/styles.css`, request.url);
+          const cssResp = await env.ASSETS.fetch(new Request(cssUrl));
+          if (cssResp.ok) {
+            const css = await cssResp.text();
+            deployHtml = deployHtml.replace(/<link[^>]*href="[^"]*style[^"]*\.css"[^>]*>/gi, `<style>${css}</style>`);
+          }
+        } catch (e) { console.error("CSS inline for deploy failed:", e); }
+        // Fix asset paths to absolute URLs so they work from the deployed domain
+        deployHtml = deployHtml.replace(/src="\/(templates\/[^"]+)"/g, 'src="https://meinekmu.pages.dev/$1"');
+        deployHtml = deployHtml.replace(/href="\/(templates\/[^"]+)"/g, 'href="https://meinekmu.pages.dev/$1"');
+
+        const projectName = generateTemplateProjectName(businessName, leadId, templateKey);
+        const deployUrl = await deployToCloudflarePages(env, projectName, deployHtml);
+        const at = await getAccessToken(env);
+        await updateCells(at, env.LEADS_SHEET_ID, rowIdx, { [`url_${templateKey}`]: deployUrl });
+        console.log(`[preview] Background deploy ${templateKey} → ${deployUrl}`);
+      } catch (e) { console.error(`[preview] Background deploy ${templateKey} failed:`, e); }
+    })());
+  }
 
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
 }
@@ -1200,7 +1272,482 @@ async function sendEmail(env, to, subject, html) {
   } catch (e) { console.error("Email send failed:", e); }
 }
 
+// ── Shared: Build 2x2 Website Screenshot Grid ───────────
+function buildWebsiteGrid(lead) {
+  const templateLabels = { earlydog: "Klassisch", bia: "Modern", liveblocks: "Frisch", loveseen: "Elegant" };
+  const orderedKeys = ["earlydog", "bia", "liveblocks", "loveseen"];
+  let gridCells = "";
+  let linkCount = 0;
+  for (const key of orderedKeys) {
+    const url = lead[`url_${key}`] || "";
+    if (url) {
+      linkCount++;
+      const thumbUrl = `https://image.thum.io/get/width/560/crop/400/${url}`;
+      gridCells += `<td width="50%" style="padding:5px;">
+        <a href="${url}" target="_blank" style="display:block;text-decoration:none;color:#444;">
+          <img src="${thumbUrl}" width="100%" style="border:1px solid #ddd;border-radius:5px;display:block;" alt="${templateLabels[key] || key}">
+          <div style="text-align:center;font-size:12px;margin-top:6px;font-weight:600;">${templateLabels[key] || key} →</div>
+        </a>
+      </td>`;
+    }
+  }
+  if (linkCount === 0) return { gridHtml: "", linkCount: 0 };
+  const cells = gridCells.split("</td>").filter(c => c.trim()).map(c => c + "</td>");
+  let gridHtml = '<table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;">';
+  for (let i = 0; i < cells.length; i += 2) {
+    gridHtml += `<tr>${cells[i]}${cells[i + 1] || '<td width="50%"></td>'}</tr>`;
+  }
+  gridHtml += '</table>';
+  return { gridHtml, linkCount };
+}
+
+// ── Shared: Standard email shell (light theme, matches cold outreach) ──
+function emailShell(subject, bodyHtml) {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:580px;margin:0 auto;padding:0;color:#333;line-height:1.6;">
+${emailHeader()}
+  <div style="padding:28px 24px;">
+    ${bodyHtml}
+    <p style="margin-bottom:0;margin-top:24px;">Freundliche Grüsse<br>
+    <strong>Louise & Mael</strong><br>
+    <span style="color:#555;">info@meine-kmu.ch</span><br>
+    <a href="https://meine-kmu.ch" style="color:#555;">meine-kmu.ch</a></p>
+  </div>
+${emailFooter()}
+</body></html>`;
+}
+
+function codeBox(leadId) {
+  return `<div style="background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;padding:22px;margin:20px 0;text-align:center;">
+      <div style="font-size:11px;color:#999;margin-bottom:8px;text-transform:uppercase;letter-spacing:1.5px;">Dein persönlicher Code</div>
+      <div style="font-size:30px;font-weight:bold;letter-spacing:6px;color:#1a1a1a;margin-bottom:16px;">${leadId}</div>
+      <a href="https://meinekmu.pages.dev/onboarding.html" style="background:#1a1a1a;color:#fff;padding:11px 26px;border-radius:4px;text-decoration:none;font-size:14px;font-weight:600;display:inline-block;">Zugriff erhalten →</a>
+    </div>`;
+}
+
+function ctaButton(text, url) {
+  const href = url || "https://meinekmu.pages.dev/onboarding.html";
+  return `<div style="text-align:center;margin:20px 0;">
+      <a href="${href}" style="display:inline-block;background:#1a1a1a;color:#fff;padding:11px 26px;border-radius:4px;text-decoration:none;font-size:14px;font-weight:600;">${text}</a>
+    </div>`;
+}
+
+// ── Reminder Emails (3 variants, with website grid) ──────
+async function sendReminderEmail(env, lead, variant) {
+  const email = lead.owner_email || lead.emails;
+  if (!email) return;
+  const businessName = lead.form_business_name || lead.business_name || "dein Business";
+  const leadId = lead.lead_id;
+  const { gridHtml, linkCount } = buildWebsiteGrid(lead);
+
+  const variants = {
+    1: {
+      subject: `${businessName}, deine Website wartet auf dich`,
+      text: `<p style="margin-top:0;">Wir haben gesehen, dass du dir Websites für <strong>${businessName}</strong> angeschaut hast. Sieht super aus!</p>
+      <p>Falls du noch nicht bestellt hast, kein Stress. Deine Entwürfe sind gespeichert und warten auf dich.</p>`,
+    },
+    2: {
+      subject: `Können wir dir helfen, ${businessName}?`,
+      text: `<p style="margin-top:0;">Deine Website Entwürfe für <strong>${businessName}</strong> sind immer noch bei uns gespeichert. Falls irgendwas unklar ist oder du nicht weiterkommst, schreib uns einfach. Wir helfen dir gerne weiter!</p>
+      <p>Du kannst uns auch direkt erreichen: <a href="mailto:info@meine-kmu.ch" style="color:#1a1a1a;">info@meine-kmu.ch</a></p>`,
+    },
+    3: {
+      subject: `Immer noch Interesse an einer Website, ${businessName}?`,
+      text: `<p style="margin-top:0;">Kurzer Check in: Dein Website Entwurf für <strong>${businessName}</strong> ist weiterhin bei uns gespeichert. Das Angebot steht, wenn du bereit bist, sind wir es auch. Schau einfach nochmal rein wenn du magst!</p>`,
+    },
+  };
+  const v = variants[variant] || variants[1];
+
+  let gridSection = "";
+  if (gridHtml && linkCount > 0) {
+    gridSection = `<p>Klick auf ein Design, um es anzuschauen:</p>${gridHtml}`;
+  }
+
+  const html = emailShell(v.subject, `
+    ${v.text}
+    ${codeBox(leadId)}
+    ${gridSection}
+  `);
+  await sendEmail(env, email, v.subject, html);
+}
+
+// ── Cold Follow-up Emails (Day 7 / Day 14) ──────────────
+async function sendColdFollowUp(env, lead, day) {
+  const email = lead.owner_email || lead.emails;
+  if (!email) return;
+  const businessName = lead.form_business_name || lead.business_name || "Ihr Unternehmen";
+  const leadId = lead.lead_id;
+  const { gridHtml, linkCount } = buildWebsiteGrid(lead);
+
+  let subject, bodyText;
+  if (day === 7) {
+    subject = `Kurze Nachfrage wegen ${businessName}`;
+    bodyText = `<p style="margin-top:0;">Guten Tag,</p>
+    <p>ich wollte kurz nachfragen ob meine E-Mail von letzter Woche angekommen ist. Ich hatte Website Entwürfe für <strong>${businessName}</strong> erstellt und würde mich freuen wenn Sie mal einen Blick drauf werfen.</p>`;
+  } else {
+    subject = `Letzte Nachricht wegen ${businessName}`;
+    bodyText = `<p style="margin-top:0;">Guten Tag,</p>
+    <p>dies ist meine letzte Nachricht, ich möchte Ihre Zeit nicht länger beanspruchen. Falls Sie die Website für <strong>${businessName}</strong> zu einem späteren Zeitpunkt möchten, können Sie sich jederzeit melden. Ihr Zugangscode bleibt noch 14 Tage aktiv.</p>`;
+  }
+
+  let gridSection = "";
+  if (gridHtml && linkCount > 0) {
+    gridSection = `<p>Klicken Sie auf ein Design, um es anzuschauen:</p>${gridHtml}`;
+  }
+
+  const html = emailShell(subject, `
+    ${bodyText}
+    ${codeBox(leadId)}
+    ${gridSection}
+  `);
+  await sendEmail(env, email, subject, html);
+}
+
+// ── Order Confirmation (after Stripe payment) ────────────
+async function sendOrderConfirmation(env, lead, selectedDomain) {
+  const email = lead.owner_email || lead.emails;
+  if (!email) return;
+  const name = lead.owner_name || "";
+  const businessName = lead.form_business_name || lead.business_name || "dein Business";
+  const greeting = name ? `Hallo ${name}!` : "Hey!";
+  const domainDisplay = selectedDomain || "deiner gewünschten Adresse";
+
+  // Website preview: show chosen template or first available
+  const chosenKey = lead.chosen_template || "";
+  const previewUrl = lead[`url_${chosenKey}`] || lead.url_earlydog || lead.url_bia || lead.url_liveblocks || lead.url_loveseen || "";
+  let previewSection = "";
+  if (previewUrl) {
+    const thumbUrl = `https://image.thum.io/get/width/560/crop/400/${previewUrl}`;
+    previewSection = `<div style="margin:20px 0;">
+      <a href="${previewUrl}" target="_blank" style="display:block;text-decoration:none;">
+        <img src="${thumbUrl}" width="100%" style="border:1px solid #ddd;border-radius:5px;display:block;" alt="Deine Website">
+      </a>
+    </div>`;
+  }
+
+  const subject = `Danke für deine Bestellung, ${businessName}!`;
+  const html = emailShell(subject, `
+    <p style="margin-top:0;">${greeting}</p>
+
+    <p>Deine Zahlung ist eingegangen, vielen Dank! Wir freuen uns mega und legen direkt los mit deiner Website für <strong>${businessName}</strong>.</p>
+
+    ${previewSection}
+
+    <div style="background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;padding:22px;margin:20px 0;text-align:center;">
+      <div style="font-size:11px;color:#999;margin-bottom:8px;text-transform:uppercase;letter-spacing:1.5px;">Deine zukünftige Webadresse</div>
+      <div style="font-size:20px;font-weight:700;color:#1a1a1a;">${domainDisplay}</div>
+    </div>
+
+    <p>Innerhalb von 48 Stunden ist deine Website unter <strong>${domainDisplay}</strong> live erreichbar. Wir melden uns sobald alles bereit ist!</p>
+
+    <p>Falls du Fragen hast, schreib uns einfach: <a href="mailto:info@meine-kmu.ch" style="color:#1a1a1a;">info@meine-kmu.ch</a></p>
+  `);
+  await sendEmail(env, email, subject, html);
+}
+
+// ── Website Is Live Email ────────────────────────────────
+async function sendWebsiteLiveEmail(env, lead) {
+  const email = lead.owner_email || lead.emails;
+  if (!email) return;
+  const name = lead.owner_name || "";
+  const businessName = lead.form_business_name || lead.business_name || "dein Business";
+  const domain = lead.selected_domain || lead.domain_option_1 || "";
+  const greeting = name ? `Hallo ${name}!` : "Hey!";
+  const subject = `${businessName} ist jetzt online!`;
+  const html = emailShell(subject, `
+    <p style="margin-top:0;">${greeting}</p>
+
+    <p>Deine Website für <strong>${businessName}</strong> ist ab sofort live erreichbar. Schau sie dir an!</p>
+
+    ${ctaButton(`${domain} besuchen →`, `https://${domain}`)}
+
+    <p><strong>Was du jetzt machen kannst:</strong></p>
+    <p style="margin:4px 0;">• Teile den Link auf Social Media und Google Business</p>
+    <p style="margin:4px 0;">• Schick den Link an deine bestehenden Kunden</p>
+    <p style="margin:4px 0;">• Falls du was ändern willst, meld dich einfach bei uns</p>
+
+    <p>Herzlichen Glückwunsch zur neuen Website! Wir freuen uns für dich.</p>
+  `);
+  await sendEmail(env, email, subject, html);
+}
+
+// ── Cancellation Email ───────────────────────────────────
+async function sendCancellationEmail(env, lead) {
+  const email = lead.owner_email || lead.emails;
+  if (!email) return;
+  const name = lead.owner_name || "";
+  const businessName = lead.form_business_name || lead.business_name || "dein Business";
+  const greeting = name ? `Hallo ${name},` : "Hey,";
+  const subject = `Schade, ${businessName}!`;
+  const html = emailShell(subject, `
+    <p style="margin-top:0;">${greeting}</p>
+
+    <p>schade dass du gehst! Deine Website für <strong>${businessName}</strong> bleibt bis zum Ende der bezahlten Periode erreichbar.</p>
+
+    <p>Falls du es dir anders überlegst, meld dich einfach bei uns. Dein Entwurf bleibt gespeichert und wir können jederzeit weitermachen.</p>
+
+    <p>Wir wünschen dir alles Gute!</p>
+
+    <p>Fragen? Schreib uns: <a href="mailto:info@meine-kmu.ch" style="color:#1a1a1a;">info@meine-kmu.ch</a></p>
+  `);
+  await sendEmail(env, email, subject, html);
+}
+
+// ── Check if domain resolves (for "website is live" auto-detection) ──
+async function checkDomainLive(domain) {
+  try {
+    const resp = await fetch(`https://cloudflare-dns.com/dns-query?name=${domain}&type=A`, {
+      headers: { Accept: "application/dns-json" },
+    });
+    const data = await resp.json();
+    return data.Answer && data.Answer.length > 0;
+  } catch { return false; }
+}
+
+// ── Reminder eligibility + variant logic ─────────────────
+function shouldSendReminder(lead, now) {
+  const email = lead.owner_email || lead.emails;
+  if (!email) return false;
+  if (!lead.last_dashboard_visit) return false;
+  // Stop if they ordered or cancelled
+  const stopStatuses = ["website_created", "website_creating", "sold"];
+  if (stopStatuses.includes(lead.status)) return false;
+  if (lead.subscription_status === "cancelled") return false;
+  if (lead.stripe_payment_date) return false;
+
+  const count = parseInt(lead.reminder_count) || 0;
+  if (count >= 8) return false; // cap at ~6 months
+
+  const msSinceVisit = now - new Date(lead.last_dashboard_visit).getTime();
+  const msSinceReminder = lead.last_reminder_sent ? now - new Date(lead.last_reminder_sent).getTime() : Infinity;
+  const DAY = 86400000;
+
+  if (count === 0) return msSinceVisit >= 3 * DAY;
+  if (count === 1) return msSinceReminder >= 7 * DAY;
+  return msSinceReminder >= 30 * DAY; // monthly
+}
+
+function getReminderVariant(lead) {
+  const count = parseInt(lead.reminder_count) || 0;
+  return (count % 3) + 1; // cycles through 1, 2, 3
+}
+
+// ── Daily Cron: Process Scheduled Emails ─────────────────
+async function processScheduledEmails(env) {
+  let accessToken;
+  try { accessToken = await getAccessToken(env); }
+  catch (e) { console.error("Cron: auth failed:", e); return; }
+
+  let sheetData;
+  try { sheetData = await getSheetValues(accessToken, env.LEADS_SHEET_ID); }
+  catch (e) { console.error("Cron: sheet fetch failed:", e); return; }
+
+  const rows = sheetData.values || [];
+  const now = Date.now();
+  let emailsSent = 0;
+  const MAX_EMAILS = 30;
+
+  for (let i = 1; i < rows.length && emailsSent < MAX_EMAILS; i++) {
+    const lead = { _row_idx: i + 1 };
+    COLUMN_NAMES.forEach((name, j) => { lead[name] = rows[i][j] || ""; });
+
+    // ── Cold follow-ups (Day 7 / Day 14) ──
+    if (lead.status === "email_sent" && lead.email_sent_date) {
+      const daysSinceCold = (now - new Date(lead.email_sent_date).getTime()) / 86400000;
+      let notes = {};
+      try { notes = JSON.parse(lead.notes || "{}"); } catch {}
+
+      if (daysSinceCold >= 14 && !notes.day14_sent) {
+        try {
+          await sendColdFollowUp(env, lead, 14);
+          notes.day14_sent = new Date().toISOString();
+          await updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, { notes: JSON.stringify(notes) });
+          emailsSent++;
+          console.log("Cron: sent Day 14 to", lead.lead_id);
+        } catch (e) { console.error("Cron: Day 14 error for", lead.lead_id, e); }
+      } else if (daysSinceCold >= 7 && !notes.day7_sent) {
+        try {
+          await sendColdFollowUp(env, lead, 7);
+          notes.day7_sent = new Date().toISOString();
+          await updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, { notes: JSON.stringify(notes) });
+          emailsSent++;
+          console.log("Cron: sent Day 7 to", lead.lead_id);
+        } catch (e) { console.error("Cron: Day 7 error for", lead.lead_id, e); }
+      }
+    }
+
+    // ── Website Is Live (DNS check) ──
+    if (lead.stripe_payment_date && !lead.live_email_sent && lead.selected_domain) {
+      try {
+        const isLive = await checkDomainLive(lead.selected_domain);
+        if (isLive) {
+          await sendWebsiteLiveEmail(env, lead);
+          await updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, {
+            live_email_sent: new Date().toISOString(),
+            status: "sold",
+          });
+          emailsSent++;
+          console.log("Cron: sent live email to", lead.lead_id, "domain:", lead.selected_domain);
+        }
+      } catch (e) { console.error("Cron: live check error for", lead.lead_id, e); }
+    }
+
+    // ── Reminders ──
+    if (shouldSendReminder(lead, now)) {
+      const variant = getReminderVariant(lead);
+      try {
+        await sendReminderEmail(env, lead, variant);
+        const count = (parseInt(lead.reminder_count) || 0) + 1;
+        await updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, {
+          last_reminder_sent: new Date().toISOString(),
+          reminder_count: String(count),
+        });
+        emailsSent++;
+        console.log("Cron: sent reminder variant", variant, "to", lead.lead_id, "(count:", count, ")");
+      } catch (e) { console.error("Cron: reminder error for", lead.lead_id, e); }
+    }
+  }
+
+  console.log(`Cron: finished. ${emailsSent} emails sent.`);
+}
+
+// ── Stripe Webhook Handler ───────────────────────────────
+// ── Confirm Live: mark lead as sold + send "website is live" email ───
+async function handleConfirmLive(leadId, env) {
+  try {
+    const accessToken = await getAccessToken(env);
+    const sheetData = await getSheetValues(accessToken, env.LEADS_SHEET_ID);
+    const lead = findLead(sheetData, leadId);
+    if (!lead) return new Response("<h1>Lead nicht gefunden</h1>", { status: 404, headers: { "Content-Type": "text/html;charset=utf-8" } });
+
+    if (lead.live_email_sent) {
+      return new Response(`<html><body style="font-family:sans-serif;max-width:500px;margin:60px auto;text-align:center;">
+        <h2>Bereits erledigt</h2><p>"Website ist live" Mail wurde bereits gesendet am ${lead.live_email_sent}.</p>
+      </body></html>`, { headers: { "Content-Type": "text/html;charset=utf-8" } });
+    }
+
+    // Update sheet: status=sold, live_email_sent=now
+    await updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, {
+      status: "sold",
+      live_email_sent: new Date().toISOString(),
+    });
+
+    // Send "website is live" email to customer
+    await sendWebsiteLiveEmail(env, lead);
+
+    const businessName = lead.form_business_name || lead.business_name || leadId;
+    return new Response(`<html><body style="font-family:sans-serif;max-width:500px;margin:60px auto;text-align:center;">
+      <h2 style="color:#1a1a1a;">Erledigt!</h2>
+      <p><strong>${businessName}</strong> wurde als "sold" markiert.</p>
+      <p>"Website ist live" Mail wurde an <strong>${lead.owner_email || lead.emails || "?"}</strong> gesendet.</p>
+    </body></html>`, { headers: { "Content-Type": "text/html;charset=utf-8" } });
+  } catch (e) {
+    return new Response(`<h1>Fehler</h1><p>${e.message}</p>`, { status: 500, headers: { "Content-Type": "text/html;charset=utf-8" } });
+  }
+}
+
+async function handleStripeWebhook(request, env) {
+  const body = await request.text();
+  const sig = request.headers.get("stripe-signature");
+
+  // Verify webhook signature
+  if (env.STRIPE_WEBHOOK_SECRET && sig) {
+    const verified = await verifyStripeSignature(body, sig, env.STRIPE_WEBHOOK_SECRET);
+    if (!verified) return jsonResp({ error: "Invalid signature" }, 400);
+  }
+
+  const event = JSON.parse(body);
+  console.log("Stripe webhook:", event.type);
+
+  let accessToken;
+  try { accessToken = await getAccessToken(env); }
+  catch (e) { return jsonResp({ error: "Auth failed" }, 500); }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+    const leadId = session.client_reference_id || session.metadata?.lead_id;
+    if (!leadId) { console.error("Stripe: no lead_id in session"); return jsonResp({ received: true }); }
+
+    const sheetData = await getSheetValues(accessToken, env.LEADS_SHEET_ID);
+    const lead = findLead(sheetData, leadId);
+    if (!lead) { console.error("Stripe: lead not found:", leadId); return jsonResp({ received: true }); }
+
+    const now = new Date().toISOString();
+    let notes = {};
+    try { notes = JSON.parse(lead.notes || "{}"); } catch {}
+    const selectedDomain = notes.selected_domain || lead.selected_domain || lead.domain_option_1 || "";
+
+    // Send order confirmation + internal notification
+    try { await sendOrderConfirmation(env, lead, selectedDomain); } catch (e) { console.error("Stripe: order email error:", e); }
+
+    const purchaseLink = domainPurchaseLink(selectedDomain, lead.domain_option_1_purchase || "");
+    const projectName = notes.project_name || "";
+    const cfDomainLink = projectName ? cloudflareDomainLink(projectName) : "";
+    const liveUrl = lead.website_url || "(noch kein Deploy)";
+    try { await sendInternalNotification(env, leadId, lead.business_name || leadId, lead.owner_email || "", liveUrl, selectedDomain, purchaseLink, cfDomainLink); }
+    catch (e) { console.error("Stripe: internal email error:", e); }
+
+    // Update sheet
+    await updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, {
+      stripe_payment_date: now,
+      subscription_status: "active",
+      selected_domain: selectedDomain,
+      status: lead.website_url ? "sold" : "website_creating",
+    });
+
+    console.log("Stripe: processed checkout for", leadId);
+  }
+
+  if (event.type === "customer.subscription.deleted") {
+    const subscription = event.data.object;
+    const leadId = subscription.metadata?.lead_id;
+    if (!leadId) { console.error("Stripe: no lead_id in subscription metadata"); return jsonResp({ received: true }); }
+
+    const sheetData = await getSheetValues(accessToken, env.LEADS_SHEET_ID);
+    const lead = findLead(sheetData, leadId);
+    if (!lead) { console.error("Stripe: lead not found for cancellation:", leadId); return jsonResp({ received: true }); }
+
+    try { await sendCancellationEmail(env, lead); } catch (e) { console.error("Stripe: cancellation email error:", e); }
+
+    await updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, {
+      subscription_status: "cancelled",
+    });
+
+    console.log("Stripe: processed cancellation for", leadId);
+  }
+
+  return jsonResp({ received: true });
+}
+
+// ── Stripe Signature Verification ────────────────────────
+async function verifyStripeSignature(payload, sigHeader, secret) {
+  try {
+    const parts = {};
+    for (const item of sigHeader.split(",")) {
+      const [key, value] = item.split("=");
+      parts[key.trim()] = value;
+    }
+    const timestamp = parts.t;
+    const signature = parts.v1;
+    if (!timestamp || !signature) return false;
+
+    // Check timestamp is within 5 minutes
+    const age = Math.abs(Date.now() / 1000 - parseInt(timestamp));
+    if (age > 300) return false;
+
+    const signedPayload = `${timestamp}.${payload}`;
+    const key = await crypto.subtle.importKey(
+      "raw", new TextEncoder().encode(secret),
+      { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+    );
+    const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signedPayload));
+    const expectedSig = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
+    return expectedSig === signature;
+  } catch { return false; }
+}
+
 async function sendInternalNotification(env, leadId, businessName, leadEmail, liveUrl, selectedDomain, purchaseLink, cfDomainLink) {
+  const confirmUrl = `https://meinekmu.pages.dev/api/lead/${leadId}/confirm-live?secret=${env.CRON_SECRET || ""}`;
   const subject = `Neue Bestellung — ${businessName} (${leadId})`;
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:580px;margin:0 auto;padding:0;color:#333;line-height:1.6;">
@@ -1218,24 +1765,40 @@ ${emailHeader()}
       <tr><td style="padding:8px 0;border-bottom:1px solid #eee;color:#888;font-size:14px;">Gewünschte Domain</td>
           <td style="padding:8px 0;border-bottom:1px solid #eee;font-size:14px;">${selectedDomain || "—"}</td></tr>
     </table>
+
     <h3 style="font-size:16px;margin-bottom:12px;">Aktionen</h3>
-    <table style="width:100%;border-collapse:collapse;">
-      <tr><td style="padding:10px 0;border-bottom:1px solid #eee;">
-        <div style="font-size:13px;color:#888;margin-bottom:4px;">Website (live)</div>
-        <a href="${liveUrl}" style="color:#1a1a1a;font-weight:600;">${liveUrl}</a></td></tr>
-      <tr><td style="padding:10px 0;border-bottom:1px solid #eee;">
-        <div style="font-size:13px;color:#888;margin-bottom:4px;">Domain kaufen</div>
-        <a href="${purchaseLink}" style="color:#1a1a1a;font-weight:600;">${selectedDomain || "Domain suchen"} →</a></td></tr>
-      <tr><td style="padding:10px 0;">
-        <div style="font-size:13px;color:#888;margin-bottom:4px;">Domain mit Website verbinden</div>
-        <a href="${cfDomainLink}" style="color:#1a1a1a;font-weight:600;">Cloudflare Pages → Custom Domain →</a></td></tr>
-    </table>
-    <div style="background:#f5f5f5;border-radius:6px;padding:16px;margin-top:24px;font-size:13px;color:#555;">
+
+    <div style="margin-bottom:12px;">
+      <a href="${liveUrl}" style="display:block;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:6px;padding:14px 16px;text-decoration:none;color:#333;">
+        <div style="font-size:11px;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Website anschauen</div>
+        <div style="font-weight:600;">${liveUrl} →</div>
+      </a>
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <a href="${purchaseLink}" style="display:block;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:6px;padding:14px 16px;text-decoration:none;color:#333;">
+        <div style="font-size:11px;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Domain kaufen (Namecheap)</div>
+        <div style="font-weight:600;">${selectedDomain || "Domain suchen"} →</div>
+      </a>
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <a href="${cfDomainLink}" style="display:block;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:6px;padding:14px 16px;text-decoration:none;color:#333;">
+        <div style="font-size:11px;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Domain verbinden (Cloudflare)</div>
+        <div style="font-weight:600;">Cloudflare Pages → Custom Domain →</div>
+      </a>
+    </div>
+
+    <div style="background:#f5f5f5;border-radius:6px;padding:16px;margin-top:20px;font-size:13px;color:#555;">
       <strong>Nächste Schritte:</strong><br>
       1. Domain kaufen (oben)<br>
       2. Domain im Cloudflare Dashboard mit dem Pages-Projekt verbinden<br>
       3. Warten bis DNS propagiert (5–30 min)<br>
-      4. Kunden informieren
+      4. Auf den Button unten klicken → Sheet wird aktualisiert + Kunde bekommt "Website ist live" Mail
+    </div>
+
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${confirmUrl}" style="display:inline-block;background:#1a1a1a;color:#fff;padding:14px 32px;border-radius:4px;text-decoration:none;font-size:15px;font-weight:600;">Domain ist verbunden, Kunde informieren →</a>
     </div>
   </div>
 ${emailFooter()}
@@ -1243,42 +1806,518 @@ ${emailFooter()}
   await sendEmail(env, "info@meine-kmu.ch", subject, html);
 }
 
-async function sendCustomerConfirmation(env, ownerName, businessName, leadEmail, selectedDomain) {
-  if (!leadEmail) { console.log("No lead email — skipping customer confirmation"); return; }
-  const greeting = `Grüezi${ownerName && ownerName.trim() ? " " + ownerName.trim() : ""}`;
-  const domainDisplay = selectedDomain || "Ihrer gewünschten Adresse";
-  const subject = `Ihre Website ist in Bearbeitung — ${businessName}`;
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:580px;margin:0 auto;padding:0;color:#333;line-height:1.6;">
-${emailHeader()}
-  <div style="padding:28px 24px;">
-    <p style="margin-top:0;">${greeting}</p>
-    <p>Vielen Dank für Ihre Bestellung! Wir haben Ihre Angaben erhalten und beginnen jetzt mit der Umsetzung Ihrer Website.</p>
-    <div style="background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;padding:22px;margin:24px 0;text-align:center;">
-      <div style="font-size:11px;color:#999;margin-bottom:8px;text-transform:uppercase;letter-spacing:1.5px;">Ihre zukünftige Adresse</div>
-      <div style="font-size:24px;font-weight:bold;letter-spacing:1px;color:#1a1a1a;margin-bottom:12px;">${domainDisplay}</div>
-      <div style="font-size:14px;color:#555;">
-        Ihre Website wird innerhalb von <strong>48 Stunden</strong> auf<br>
-        <strong>${domainDisplay}</strong> live geschaltet.
-      </div>
-    </div>
-    <p style="font-size:14px;color:#555;">
-      Sobald Ihre Website fertig ist, erhalten Sie von uns eine weitere E-Mail mit dem direkten Link.
-      Falls Sie in der Zwischenzeit Fragen haben, antworten Sie einfach auf diese E-Mail.
-    </p>
-    <p style="margin-bottom:0;">Freundliche Grüsse<br>
-    <strong>Das meine-kmu.ch Team</strong><br>
-    <a href="mailto:info@meine-kmu.ch" style="color:#555;">info@meine-kmu.ch</a><br>
-    <a href="https://meine-kmu.ch" style="color:#555;">meine-kmu.ch</a></p>
-  </div>
-${emailFooter()}
-</body></html>`;
-  await sendEmail(env, leadEmail, subject, html);
+// ── Save Form Data ───────────────────────────────────────
+async function handleSaveForm(leadId, request, env) {
+  if (!leadId) return jsonResp({ error: "Invalid lead ID" }, 400);
+  let body;
+  try { body = await request.json(); } catch { return jsonResp({ error: "Ungültige Anfrage." }, 400); }
+
+  let accessToken;
+  try { accessToken = await getAccessToken(env); } catch { return jsonResp({ error: "Verbindungsfehler." }, 500); }
+  const sheetData = await getSheetValues(accessToken, env.LEADS_SHEET_ID);
+  const lead = findLead(sheetData, leadId);
+  if (!lead) return jsonResp({ error: "Lead nicht gefunden." }, 404);
+
+  const updates = {};
+  if (body.business_name) { updates.form_business_name = body.business_name; updates.business_name = body.business_name; }
+  if (body.description) updates.form_description = body.description;
+  if (body.values) updates.form_values = body.values;
+  if (body.phone !== undefined) { updates.form_phone = body.phone; if (body.phone) updates.phone = body.phone; }
+  if (body.address !== undefined) { updates.form_address = body.address; if (body.address) updates.address = body.address; }
+
+  // Also store in notes JSON for backward compatibility
+  const existingNotes = lead.notes ? (() => { try { return JSON.parse(lead.notes); } catch { return {}; } })() : {};
+  if (body.description) existingNotes.description = body.description;
+  if (body.values) existingNotes.values = body.values;
+  updates.notes = JSON.stringify(existingNotes);
+
+  try { await updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, updates); }
+  catch (e) { console.error("Save form error:", e); return jsonResp({ error: "Speichern fehlgeschlagen." }, 500); }
+
+  return jsonResp({ success: true });
+}
+
+// ── Generate All 4 Templates (background) ────────────────
+function generateTemplateProjectName(businessName, leadId, templateKey) {
+  let name = businessName || "kmu";
+  const umlauts = [["ä","ae"],["ö","oe"],["ü","ue"],["ß","ss"],["Ä","Ae"],["Ö","Oe"],["Ü","Ue"]];
+  for (const [o, n] of umlauts) name = name.split(o).join(n);
+  name = name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  name = name.toLowerCase().trim().replace(/[^a-z0-9-]/g, "-").replace(/-{2,}/g, "-").replace(/^-|-$/g, "").slice(0, 30).replace(/-$/, "") || "kmu";
+  const suffix = (leadId || "000000").slice(0, 6);
+  return `kmu-${name}-${suffix}-${templateKey}`;
+}
+
+async function handleGenerateAll(leadId, request, env, ctx) {
+  if (!leadId) return jsonResp({ error: "Invalid lead ID" }, 400);
+
+  // Accept form data from request body (avoids race condition with save-form)
+  let bodyData = {};
+  try { bodyData = await request.json(); } catch { /* empty body is fine */ }
+
+  let accessToken;
+  try { accessToken = await getAccessToken(env); } catch { return jsonResp({ error: "Verbindungsfehler." }, 500); }
+  const sheetData = await getSheetValues(accessToken, env.LEADS_SHEET_ID);
+  const lead = findLead(sheetData, leadId);
+  if (!lead) return jsonResp({ error: "Lead nicht gefunden." }, 404);
+
+  // Set initial generation status
+  const initStatus = {};
+  TEMPLATE_KEYS.forEach(k => { initStatus[k] = "pending"; });
+  try { await updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, { generation_status: JSON.stringify(initStatus) }); }
+  catch (e) { console.error("Status init error:", e); }
+
+  // Background generation via waitUntil — optimized to share AI + Pexels across templates
+  const requestUrl = request.url;
+  const rowIdx = lead._row_idx;
+  ctx.waitUntil((async () => {
+    // Use form data from body (freshest) with sheet data as fallback
+    const description = bodyData.description || lead.form_description || "";
+    const values = bodyData.values || lead.form_values || "";
+    const phone = bodyData.phone || lead.form_phone || lead.phone || "";
+    const address = bodyData.address || lead.form_address || lead.address || "";
+    const businessName = bodyData.business_name || lead.form_business_name || lead.business_name || "";
+    const isNoCode = lead.acquisition_source === "organic" || lead.acquisition_source === "self-signup";
+    const email = lead.owner_email || lead.emails || "";
+
+    // ── SHARED STEP 1: Build lead placeholder data ONCE ──
+    const cust = { description, values, phone, address };
+    const placeholderData = leadToPlaceholderData(lead, cust);
+
+    // ── SHARED STEP 2: Call AI enrichment ONCE (same for all templates) ──
+    let aiText = {};
+    let aiCategory = "";
+    try {
+      aiText = await enrichWithAI(env, { ...TEMPLATE_DEFAULTS.bia, ...placeholderData, _description: placeholderData._description || "", _values: placeholderData._values || "" }, "bia");
+      if (aiText.CATEGORY) { aiCategory = aiText.CATEGORY; delete aiText.CATEGORY; }
+    } catch (e) { console.error("Shared AI enrichment error:", e); }
+
+    // ── SHARED STEP 3: Fetch Pexels images ONCE per slot type ──
+    const allImageSlots = {};
+    for (const tplKey of TEMPLATE_KEYS) {
+      const slotMap = IMAGE_SLOT_MAP[tplKey] || {};
+      for (const [key, desc] of Object.entries(slotMap)) {
+        if (!allImageSlots[key]) allImageSlots[key] = desc;
+      }
+    }
+    let sharedImages = {};
+    const hasBusinessContext = !!(description || values || lead.category || businessName);
+    if (hasBusinessContext) {
+      const mergedForImages = { ...placeholderData, category: aiCategory || lead.category || "" };
+      sharedImages = await suggestBusinessImages(env, mergedForImages, allImageSlots);
+    }
+
+    // ── Track status in memory (avoid re-reading sheet for each template) ──
+    const genStatus = { ...initStatus };
+    const genUrls = {};
+
+    // Helper: update sheet with current status + url for a single template
+    // Uses the already-obtained accessToken from outer scope (avoids 4 parallel OAuth calls)
+    async function updateTemplateResult(tplKey, url, status) {
+      genStatus[tplKey] = status;
+      if (url) genUrls[tplKey] = url;
+      try {
+        const updates = { generation_status: JSON.stringify(genStatus) };
+        if (url) updates[`url_${tplKey}`] = url;
+        await updateCells(accessToken, env.LEADS_SHEET_ID, rowIdx, updates);
+      } catch (e) { console.error(`Status update error for ${tplKey}:`, e); }
+    }
+
+    // ── PARALLEL STEP 4: Generate + deploy all 4 templates ──
+    await Promise.allSettled(TEMPLATE_KEYS.map(async (tplKey) => {
+      try {
+        // Build template-specific merged data using shared AI + images
+        const defaults = TEMPLATE_DEFAULTS[tplKey] || {};
+        const merged = { ...defaults };
+        for (const [key, value] of Object.entries(placeholderData)) {
+          if (key.startsWith("_")) continue;
+          if (value !== null && value !== undefined && value !== "") merged[key] = String(value);
+        }
+        // Apply shared AI text
+        for (const [key, value] of Object.entries(aiText)) {
+          if (value && !key.startsWith("IMAGE_")) merged[key] = String(value);
+        }
+        // Apply shared Pexels images for this template's slots
+        const tplSlotMap = IMAGE_SLOT_MAP[tplKey] || {};
+        for (const key of Object.keys(tplSlotMap)) {
+          if (sharedImages[key]) merged[key] = sharedImages[key];
+        }
+        // Auto-generate META_DESCRIPTION
+        if (!merged.META_DESCRIPTION) {
+          const n = merged.BUSINESS_NAME || "";
+          const t = merged.TAGLINE || "";
+          merged.META_DESCRIPTION = t ? `${n} — ${t}` : n;
+        }
+
+        // Fetch template HTML and apply placeholders
+        const templateDir = `templates/${tplKey}`;
+        const rawDir = `templates-raw/${tplKey}`;
+        const assetUrl = new URL(`/${rawDir}/index.html`, requestUrl);
+        const templateResp = await env.ASSETS.fetch(new Request(assetUrl));
+        if (!templateResp.ok) throw new Error("Template HTML not found for " + tplKey);
+        let html = await templateResp.text();
+
+        for (const [key, value] of Object.entries(merged)) {
+          if (key.startsWith("_")) continue;
+          html = html.replaceAll(`{{${key}}}`, value);
+        }
+        html = html.replace(/\{\{[A-Z_0-9]+\}\}/g, "");
+
+        // Fix paths
+        html = html.replaceAll('href="styles.css"', `href="/${templateDir}/styles.css"`);
+        html = html.replaceAll('href="./styles.css"', `href="/${templateDir}/styles.css"`);
+        html = html.replace(/src="assets\//g, `src="/${templateDir}/assets/`);
+
+        // Inline CSS
+        try {
+          const cssUrl = new URL(`/${templateDir}/styles.css`, requestUrl);
+          const cssResp = await env.ASSETS.fetch(new Request(cssUrl));
+          if (cssResp.ok) {
+            const css = await cssResp.text();
+            html = html.replace(/<link[^>]*href="[^"]*style[^"]*\.css"[^>]*>/gi, `<style>${css}</style>`);
+          }
+        } catch (e) { console.error("CSS inline failed:", e); }
+
+        // Fix asset paths to absolute URLs so they work from deployed domain
+        html = html.replace(/src="\/(templates\/[^"]+)"/g, 'src="https://meinekmu.pages.dev/$1"');
+        html = html.replace(/href="\/(templates\/[^"]+)"/g, 'href="https://meinekmu.pages.dev/$1"');
+
+        // Deploy
+        const projectName = generateTemplateProjectName(businessName, leadId, tplKey);
+        const deployUrl = await deployToCloudflarePages(env, projectName, html);
+        await updateTemplateResult(tplKey, deployUrl, "done");
+        return { tplKey, url: deployUrl };
+      } catch (e) {
+        console.error(`Generation failed for ${tplKey}:`, e);
+        await updateTemplateResult(tplKey, null, "error");
+        throw e;
+      }
+    }));
+
+    // ── STEP 5: Send welcome email with website previews ──
+    if (email && !lead.welcome_email_sent) {
+      try {
+        await sendCodeEmail(env, leadId, email, businessName, genUrls);
+        // Mark welcome email as sent
+        try { await updateCells(accessToken, env.LEADS_SHEET_ID, rowIdx, { welcome_email_sent: new Date().toISOString() }); }
+        catch (e) { console.error("Welcome tracking error:", e); }
+      } catch (e) { console.error("Welcome email error:", e); }
+    }
+  })());
+
+  return jsonResp({ status: "generating" }, 202);
+}
+
+// ── Generation Status ────────────────────────────────────
+async function handleGenerationStatus(leadId, env) {
+  if (!leadId) return jsonResp({ error: "Invalid lead ID" }, 400);
+
+  let accessToken;
+  try { accessToken = await getAccessToken(env); } catch { return jsonResp({ error: "Verbindungsfehler." }, 500); }
+  const sheetData = await getSheetValues(accessToken, env.LEADS_SHEET_ID);
+  const lead = findLead(sheetData, leadId);
+  if (!lead) return jsonResp({ error: "Lead nicht gefunden." }, 404);
+
+  const status = lead.generation_status ? (() => { try { return JSON.parse(lead.generation_status); } catch { return {}; } })() : {};
+  const urls = {};
+  TEMPLATE_KEYS.forEach(k => {
+    if (lead[`url_${k}`]) urls[k] = lead[`url_${k}`];
+  });
+
+  return jsonResp({ status, urls });
+}
+
+// ── AI Chat Edit ─────────────────────────────────────────
+async function handleChatEdit(leadId, request, env) {
+  if (!leadId) return jsonResp({ error: "Invalid lead ID" }, 400);
+  if (!env.ANTHROPIC_API_KEY) return jsonResp({ error: "AI nicht konfiguriert." }, 500);
+
+  let body;
+  try { body = await request.json(); } catch { return jsonResp({ error: "Ungültige Anfrage." }, 400); }
+  const { html, message, template_key, history, business_context } = body;
+  if (!html || !message) return jsonResp({ error: "HTML und Nachricht sind erforderlich." }, 400);
+
+  // Build business context for the system prompt
+  const biz = business_context || {};
+  const bizName = biz.business_name || "unbekannt";
+  const bizCategory = biz.category || "";
+  const bizDescription = biz.description || "";
+
+  const systemPrompt = `Du bist ein freundlicher Website-Editor-Assistent für Schweizer KMU. Du hilfst Kunden, ihre Website anzupassen.
+
+Geschäftskontext:
+- Firma: ${bizName}
+- Branche: ${bizCategory}
+- Beschreibung: ${bizDescription}
+
+Du erhältst den aktuellen HTML-Code der Website und eine Nachricht vom Kunden.
+
+WICHTIG — Antworte IMMER als gültiges JSON-Objekt mit genau einem dieser Formate:
+{"type": "edit", "html": "<vollständiges geändertes HTML>", "message": "Kurze, natürliche Beschreibung der Änderung"}
+oder
+{"type": "chat", "message": "Deine Antwort an den Kunden"}
+
+Regeln:
+- Verwende "type": "edit" NUR wenn du tatsächlich das HTML änderst. Gib dann das VOLLSTÄNDIGE geänderte HTML im "html"-Feld zurück.
+- Verwende "type": "chat" wenn der Kunde eine Frage stellt, etwas Unmögliches verlangt, oder du Klarstellung brauchst.
+- Halte dich STRIKT an den Geschäftskontext. Ändere NIEMALS Texte so, dass sie nichts mehr mit der Firma zu tun haben. Wenn der Kunde z.B. ein Bild ändern will, ändere NUR das Bild — nicht den Text.
+- Ändere NUR das, was der Kunde explizit verlangt. Behalte alle anderen Texte, Bilder, Styles und Struktur exakt bei.
+- Schreibe auf Deutsch (Schweizer Stil, kein ß).
+- Verwende immer echte Umlaute (ä, ö, ü, Ä, Ö, Ü) — NIEMALS ae, oe, ue schreiben.
+- Variiere deine Antworten im "message"-Feld — sei natürlich und freundlich, nicht roboterhaft.
+- Wenn ein Bild-URL als data:image/... angegeben wird, verwende diese URL direkt im src-Attribut.
+
+Was du KANNST:
+- Texte ändern (Überschriften, Absätze, Button-Texte)
+- Farben und einfache Styles anpassen
+- Bilder austauschen (wenn eine URL oder data:image gegeben wird)
+- Abschnitte umordnen oder entfernen
+- Neue Textabschnitte hinzufügen
+- Schriftarten anpassen
+
+Was du NICHT kannst (antworte mit "type": "chat" und verweise auf info@meine-kmu.ch):
+- Kontaktformulare mit Backend-Funktionalität
+- Interaktive JavaScript-Features (Slider, Animationen, Kalender)
+- E-Commerce / Shop-Funktionalität
+- SEO-Optimierung, Google Analytics, Domain-Konfiguration
+- Alles was über HTML/CSS hinausgeht
+
+Bei Anfragen die du nicht umsetzen kannst, antworte freundlich und verweise auf info@meine-kmu.ch für persönliche Unterstützung.`;
+
+  try {
+    // Build messages array with conversation history
+    const messages = [];
+    if (history && Array.isArray(history)) {
+      const recent = history.slice(-10);
+      for (const turn of recent) {
+        if (turn.role && turn.content) {
+          messages.push({ role: turn.role, content: turn.content });
+        }
+      }
+    }
+    // Current request with HTML context
+    messages.push({
+      role: "user",
+      content: `Aktuelle Website:\n${html}\n\nKundenanfrage: ${message}`,
+    });
+
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": env.ANTHROPIC_API_KEY,
+        "content-type": "application/json",
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 16000,
+        system: systemPrompt,
+        messages,
+      }),
+    });
+
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      throw new Error(errData.error?.message || `API error ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    let editedText = data.content?.[0]?.text || "";
+
+    // Strip any accidental markdown code fences
+    editedText = editedText.replace(/^```(?:json|html)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+
+    // Parse structured response with fallbacks
+    let result;
+    try {
+      result = JSON.parse(editedText);
+    } catch {
+      // Fallback: if AI returned raw HTML (starts with < or <!DOCTYPE)
+      if (editedText.trimStart().startsWith("<")) {
+        result = { type: "edit", html: editedText, message: "Änderung umgesetzt!" };
+      } else {
+        // AI returned plain text — treat as chat response
+        result = { type: "chat", message: editedText };
+      }
+    }
+
+    // Validate: if type is "edit", the html field must look like actual HTML
+    if (result.type === "edit") {
+      const htmlContent = (result.html || "").trim();
+      if (!htmlContent.startsWith("<") || htmlContent.length < 50) {
+        result = { type: "chat", message: result.message || result.html || "Etwas ist schiefgegangen." };
+      }
+    }
+
+    return jsonResp(result);
+  } catch (e) {
+    console.error("Chat edit error:", e);
+    return jsonResp({ error: "Änderung fehlgeschlagen: " + e.message }, 500);
+  }
+}
+
+// ── Upload image for chat editing ─────────────────────────
+async function handleChatImageUpload(leadId, request, env) {
+  if (!leadId) return jsonResp({ error: "Invalid lead ID" }, 400);
+
+  let formData;
+  try { formData = await request.formData(); } catch { return jsonResp({ error: "Ungültige Anfrage." }, 400); }
+  const file = formData.get("image");
+  if (!file || !file.size) return jsonResp({ error: "Kein Bild hochgeladen." }, 400);
+
+  // Limit to 5MB
+  if (file.size > 5 * 1024 * 1024) return jsonResp({ error: "Bild zu gross (max. 5MB)." }, 400);
+
+  try {
+    const buf = await file.arrayBuffer();
+    const b64 = arrayBufferToBase64(buf);
+    const dataUrl = `data:${file.type || "image/png"};base64,${b64}`;
+    return jsonResp({ url: dataUrl, filename: file.name });
+  } catch (e) {
+    console.error("Image upload error:", e);
+    return jsonResp({ error: "Upload fehlgeschlagen: " + e.message }, 500);
+  }
+}
+
+// ── Save HTML to Drive + Redeploy ────────────────────────
+async function handleSaveHtml(leadId, request, env) {
+  if (!leadId) return jsonResp({ error: "Invalid lead ID" }, 400);
+
+  let body;
+  try { body = await request.json(); } catch { return jsonResp({ error: "Ungültige Anfrage." }, 400); }
+  const { html, template_key } = body;
+  if (!html || !template_key) return jsonResp({ error: "HTML und Template sind erforderlich." }, 400);
+  if (!TEMPLATE_KEYS.includes(template_key)) return jsonResp({ error: "Ungültiges Template." }, 400);
+
+  let accessToken;
+  try { accessToken = await getAccessToken(env); } catch { return jsonResp({ error: "Verbindungsfehler." }, 500); }
+  const sheetData = await getSheetValues(accessToken, env.LEADS_SHEET_ID);
+  const lead = findLead(sheetData, leadId);
+  if (!lead) return jsonResp({ error: "Lead nicht gefunden." }, 404);
+
+  const updates = {};
+
+  // 1. Save HTML to Google Drive
+  try {
+    const folderId = await getOrCreateFolder(accessToken, env.DRIVE_UPLOAD_FOLDER_ID, `${lead.business_name || leadId} (${leadId})`);
+    const encoder = new TextEncoder();
+    const htmlBytes = encoder.encode(html);
+    const fileId = await uploadFileToDrive(accessToken, folderId, htmlBytes, `${template_key}-edited.html`, "text/html");
+    if (fileId) updates[`html_${template_key}_drive_id`] = fileId;
+  } catch (e) { console.error("Drive save error:", e); }
+
+  // 2. Redeploy to Cloudflare Pages
+  let liveUrl = "";
+  try {
+    const businessName = lead.form_business_name || lead.business_name || "";
+    const projectName = generateTemplateProjectName(businessName, leadId, template_key);
+    liveUrl = await deployToCloudflarePages(env, projectName, html);
+    updates[`url_${template_key}`] = liveUrl;
+  } catch (e) { console.error("Redeploy error:", e); }
+
+  // 3. Update sheet
+  if (Object.keys(updates).length > 0) {
+    try { await updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, updates); }
+    catch (e) { console.error("Sheet update error:", e); }
+  }
+
+  return jsonResp({ success: true, live_url: liveUrl });
+}
+
+// ── Send Code Email (no-code users) ──────────────────────
+async function sendCodeEmail(env, leadId, email, businessName, urls) {
+  const templateLabels = { earlydog: "Klassisch", bia: "Modern", liveblocks: "Frisch", loveseen: "Elegant" };
+
+  // Build 2x2 screenshot grid (light theme, matches cold outreach)
+  let gridCells = "";
+  let linkCount = 0;
+  const orderedKeys = ["earlydog", "bia", "liveblocks", "loveseen"];
+  for (const key of orderedKeys) {
+    const url = urls[key];
+    if (url) {
+      linkCount++;
+      const thumbUrl = `https://image.thum.io/get/width/560/crop/400/${url}`;
+      gridCells += `<td width="50%" style="padding:5px;">
+        <a href="${url}" target="_blank" style="display:block;text-decoration:none;color:#444;">
+          <img src="${thumbUrl}" width="100%" style="border:1px solid #ddd;border-radius:5px;display:block;" alt="${templateLabels[key] || key}">
+          <div style="text-align:center;font-size:12px;margin-top:6px;font-weight:600;">${templateLabels[key] || key} →</div>
+        </a>
+      </td>`;
+    }
+  }
+
+  if (linkCount === 0) return; // No URLs to send
+
+  // Arrange into 2x2 grid rows
+  const cells = gridCells.split("</td>").filter(c => c.trim()).map(c => c + "</td>");
+  let gridHtml = '<table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;">';
+  for (let i = 0; i < cells.length; i += 2) {
+    gridHtml += `<tr>${cells[i]}${cells[i + 1] || '<td width="50%"></td>'}</tr>`;
+  }
+  gridHtml += '</table>';
+
+  const biz = businessName || "dein Business";
+  const subject = `${biz}, deine ${linkCount} Website Vorschläge sind da!`;
+  const html = emailShell(subject, `
+    <p style="margin-top:0;">Hey, schön dass du da bist!</p>
+
+    <p>Wir haben <strong>${linkCount} professionelle Website Designs</strong> für <strong>${biz}</strong> erstellt, komplett mit deinen Texten und Bildern.</p>
+
+    <p>Hier ist dein persönlicher Code, damit du jederzeit zurückkommen kannst:</p>
+
+    ${codeBox(leadId)}
+
+    <p>Klick auf ein Design, um es anzuschauen:</p>
+
+    ${gridHtml}
+
+    <p>Logge dich mit deinem Code ein, wähle dein Lieblingsdesign und passe es direkt an. Kostenlos und unverbindlich.</p>
+  `);
+  await sendEmail(env, email, subject, html);
+}
+
+// ── End Session (deploy check + send code email) ─────────
+async function handleEndSession(leadId, env) {
+  if (!leadId) return jsonResp({ error: "Invalid lead ID" }, 400);
+  let accessToken;
+  try { accessToken = await getAccessToken(env); } catch { return jsonResp({ error: "Verbindungsfehler." }, 500); }
+  const sheetData = await getSheetValues(accessToken, env.LEADS_SHEET_ID);
+  const lead = findLead(sheetData, leadId);
+  if (!lead) return jsonResp({ error: "Lead nicht gefunden." }, 404);
+
+  // Collect deployed URLs
+  const urls = {};
+  TEMPLATE_KEYS.forEach(k => { if (lead[`url_${k}`]) urls[k] = lead[`url_${k}`]; });
+
+  // Send code email if not already sent and has at least one deployed URL
+  const email = lead.owner_email || lead.emails || "";
+  const businessName = lead.form_business_name || lead.business_name || "";
+  if (email && !lead.email_sent_date && Object.keys(urls).length > 0) {
+    try {
+      await sendCodeEmail(env, leadId, email, businessName, urls);
+      await updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, { email_sent_date: new Date().toISOString() });
+    } catch (e) { console.error("End-session email error:", e); }
+  }
+
+  return jsonResp({ success: true });
+}
+
+// ── Fetch URL Proxy (for cross-origin HTML in editor) ────
+async function handleFetchUrl(request) {
+  let body;
+  try { body = await request.json(); } catch { return jsonResp({ error: "Invalid request" }, 400); }
+  const targetUrl = body.url;
+  if (!targetUrl || !targetUrl.includes(".pages.dev")) return jsonResp({ error: "Invalid URL" }, 400);
+  try {
+    const resp = await fetch(targetUrl);
+    const html = await resp.text();
+    return jsonResp({ html });
+  } catch (e) { return jsonResp({ error: "Fetch failed: " + e.message }, 500); }
 }
 
 // ── Main Worker ───────────────────────────────────────────
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -1296,7 +2335,7 @@ export default {
       try {
         // GET /api/lead/:id
         const leadMatch = path.match(/^\/api\/lead\/([^\/]+)$/);
-        if (leadMatch && request.method === "GET") return handleGetLead(leadMatch[1], env);
+        if (leadMatch && request.method === "GET") return handleGetLead(leadMatch[1], env, ctx);
 
         // POST /api/lead/register (no-code flow)
         if (path === "/api/lead/register" && request.method === "POST") return handleRegister(request, env);
@@ -1305,13 +2344,44 @@ export default {
         const updateMatch = path.match(/^\/api\/lead\/([^\/]+)\/update$/);
         if (updateMatch && request.method === "POST") return handleUpdateLead(updateMatch[1], request, env);
 
+        // POST /api/lead/:id/save-form (save info form data)
+        const saveFormMatch = path.match(/^\/api\/lead\/([^\/]+)\/save-form$/);
+        if (saveFormMatch && request.method === "POST") return handleSaveForm(saveFormMatch[1], request, env);
+
+        // POST /api/lead/:id/generate-all (background generation of all 4 templates)
+        const generateAllMatch = path.match(/^\/api\/lead\/([^\/]+)\/generate-all$/);
+        if (generateAllMatch && request.method === "POST") return handleGenerateAll(generateAllMatch[1], request, env, ctx);
+
+        // GET /api/lead/:id/generation-status (poll generation progress)
+        const genStatusMatch = path.match(/^\/api\/lead\/([^\/]+)\/generation-status$/);
+        if (genStatusMatch && request.method === "GET") return handleGenerationStatus(genStatusMatch[1], env);
+
+        // POST /api/lead/:id/chat-edit (AI chat editing)
+        const chatEditMatch = path.match(/^\/api\/lead\/([^\/]+)\/chat-edit$/);
+        if (chatEditMatch && request.method === "POST") return handleChatEdit(chatEditMatch[1], request, env);
+
+        // POST /api/lead/:id/upload-chat-image (image upload for chat editor)
+        const chatImageMatch = path.match(/^\/api\/lead\/([^\/]+)\/upload-chat-image$/);
+        if (chatImageMatch && request.method === "POST") return handleChatImageUpload(chatImageMatch[1], request, env);
+
+        // POST /api/lead/:id/save-html (save edited HTML to Drive + redeploy)
+        const saveHtmlMatch = path.match(/^\/api\/lead\/([^\/]+)\/save-html$/);
+        if (saveHtmlMatch && request.method === "POST") return handleSaveHtml(saveHtmlMatch[1], request, env);
+
+        // POST /api/lead/:id/end-session (deploy check + send code email)
+        const endSessionMatch = path.match(/^\/api\/lead\/([^\/]+)\/end-session$/);
+        if (endSessionMatch && request.method === "POST") return handleEndSession(endSessionMatch[1], env);
+
+        // POST /api/fetch-url (proxy for cross-origin HTML fetch)
+        if (path === "/api/fetch-url" && request.method === "POST") return handleFetchUrl(request);
+
         // POST /api/lead/:id/order
         const orderMatch = path.match(/^\/api\/lead\/([^\/]+)\/order$/);
         if (orderMatch && request.method === "POST") return handleOrder(orderMatch[1], request, env);
 
         // GET /api/preview/:id/:template
         const previewMatch = path.match(/^\/api\/preview\/([^\/]+)\/(earlydog|bia|liveblocks|loveseen)$/);
-        if (previewMatch && request.method === "GET") return handlePreview(previewMatch[1], previewMatch[2], request, env);
+        if (previewMatch && request.method === "GET") return handlePreview(previewMatch[1], previewMatch[2], request, env, ctx);
 
         // Fallback preview for _fallback
         const fallbackMatch = path.match(/^\/api\/preview\/_fallback\/(earlydog|bia|liveblocks|loveseen)$/);
@@ -1325,6 +2395,28 @@ export default {
         if (path === "/api/check-domains" && request.method === "POST")
           return handleCheckDomains(request);
 
+        // GET /api/lead/:id/confirm-live — mark lead as live + send customer email (triggered from internal notification)
+        const confirmLiveMatch = path.match(/^\/api\/lead\/([^\/]+)\/confirm-live$/);
+        if (confirmLiveMatch && request.method === "GET") {
+          const secret = url.searchParams.get("secret");
+          if (!env.CRON_SECRET || secret !== env.CRON_SECRET)
+            return new Response("<h1>Nicht autorisiert</h1>", { status: 401, headers: { "Content-Type": "text/html" } });
+          return handleConfirmLive(confirmLiveMatch[1], env);
+        }
+
+        // POST /api/webhooks/stripe — Stripe payment/cancellation webhooks
+        if (path === "/api/webhooks/stripe" && request.method === "POST")
+          return handleStripeWebhook(request, env);
+
+        // POST /api/cron/process-reminders — manual/fallback cron trigger
+        if (path === "/api/cron/process-reminders" && request.method === "POST") {
+          const auth = request.headers.get("Authorization");
+          if (!env.CRON_SECRET || auth !== `Bearer ${env.CRON_SECRET}`)
+            return jsonResp({ error: "Unauthorized" }, 401);
+          ctx.waitUntil(processScheduledEmails(env));
+          return jsonResp({ status: "processing" });
+        }
+
         return jsonResp({ error: "Not found" }, 404);
       } catch (e) {
         console.error("API error:", e);
@@ -1334,5 +2426,10 @@ export default {
 
     // Everything else → serve static assets
     return env.ASSETS.fetch(request);
+  },
+
+  // Daily cron: process reminders, cold follow-ups, DNS checks
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(processScheduledEmails(env));
   },
 };

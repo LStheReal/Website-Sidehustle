@@ -17,11 +17,13 @@ Usage:
 """
 
 import argparse
+import difflib
 import importlib.util
 import json
 import os
 import subprocess
 import sys
+import time
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -111,6 +113,7 @@ TEMPLATE_LABELS = {
 
 # --- Google Sheet column indices (1-based, matching LEAD_COLUMNS in update_sheet.py) ---
 
+# Column indices (1-based) — MUST match LEAD_COLUMNS in update_sheet.py (42 columns)
 COL = {
     "lead_id": 1,
     "scraped_at": 2,
@@ -134,19 +137,26 @@ COL = {
     "linkedin": 20,
     "status": 21,
     "domain_option_1": 22,
-    "domain_option_2": 23,
-    "domain_option_3": 24,
-    "website_url": 25,
-    "email_sent_date": 26,
-    "response_date": 27,
-    "notes": 28,
-    "draft_url_1": 29,
-    "draft_url_2": 30,
-    "draft_url_3": 31,
-    "draft_url_4": 32,
-    "chosen_template": 33,
-    "next_action": 34,
-    "next_action_date": 35,
+    "domain_option_1_purchase": 23,
+    "domain_option_1_price": 24,
+    "domain_option_2": 25,
+    "domain_option_2_purchase": 26,
+    "domain_option_2_price": 27,
+    "domain_option_3": 28,
+    "domain_option_3_purchase": 29,
+    "domain_option_3_price": 30,
+    "website_url": 31,
+    "email_sent_date": 32,
+    "response_date": 33,
+    "notes": 34,
+    "draft_url_1": 35,
+    "draft_url_2": 36,
+    "draft_url_3": 37,
+    "draft_url_4": 38,
+    "chosen_template": 39,
+    "next_action": 40,
+    "next_action_date": 41,
+    "acquisition_source": 42,
 }
 
 COLUMN_NAMES = list(COL.keys())
@@ -193,6 +203,53 @@ def read_all_leads(worksheet) -> list[dict]:
         lead["_row_idx"] = idx + 2  # +2 because row 1 is header, and idx is 0-based
 
     return leads
+
+
+def find_lead_by_name(worksheet, search_name: str) -> list[dict]:
+    """
+    Fuzzy-match a business name against all leads in the sheet.
+
+    Returns list of matching leads (best matches first), each with
+    lead_id, business_name, city, status, and match_score.
+    """
+    leads = read_all_leads(worksheet)
+    if not leads:
+        return []
+
+    names = [l.get("business_name", "") for l in leads]
+    # Try exact substring match first
+    exact = []
+    for lead in leads:
+        biz = lead.get("business_name", "")
+        if search_name.lower() in biz.lower():
+            exact.append({
+                "lead_id": lead.get("lead_id", ""),
+                "business_name": biz,
+                "city": lead.get("city", ""),
+                "status": lead.get("status", ""),
+                "match_score": 1.0,
+            })
+
+    if exact:
+        return exact
+
+    # Fuzzy match
+    close = difflib.get_close_matches(search_name, names, n=5, cutoff=0.4)
+    results = []
+    for match_name in close:
+        for lead in leads:
+            if lead.get("business_name") == match_name:
+                score = difflib.SequenceMatcher(None, search_name.lower(), match_name.lower()).ratio()
+                results.append({
+                    "lead_id": lead.get("lead_id", ""),
+                    "business_name": match_name,
+                    "city": lead.get("city", ""),
+                    "status": lead.get("status", ""),
+                    "match_score": round(score, 2),
+                })
+                break
+
+    return results
 
 
 def update_cells(worksheet, row_idx: int, updates: dict):
@@ -286,7 +343,11 @@ def process_new(lead: dict, worksheet, sender_info: dict) -> list[dict]:
     template_order = get_template_order(category)
     draft_urls = {}
 
-    for template_name in template_order:
+    for t_idx, template_name in enumerate(template_order):
+        # Delay between deployments to avoid Cloudflare rate limits
+        if t_idx > 0:
+            time.sleep(15)
+
         print(f"\n  Building {template_name} template...")
         output_dir = str(PROJECT_ROOT / ".tmp" / f"draft_{lead_id}_{template_name}")
 
@@ -465,8 +526,8 @@ def process_website_created(lead: dict, worksheet, sender_info: dict) -> list[di
             "emails": [email],
         }
         email_path = save_intermediate(email_result, f"cold_email_{lead_id}")
-        sheet_updates["status"] = "email_sent"
-        sheet_updates["email_sent_date"] = datetime.now().strftime("%Y-%m-%d")
+        # DO NOT set status to "email_sent" here — email is only generated, not sent.
+        # Actual sending happens in action_send_emails which calls send_email() via SMTP.
         sheet_updates["next_action"] = f"SEND EMAIL to {owner_email}"
         sheet_updates["next_action_date"] = datetime.now().strftime("%Y-%m-%d")
 
@@ -1336,14 +1397,20 @@ def action_send_emails(worksheet, sender_info: dict, sheet_title: str, count: in
 def main():
     parser = argparse.ArgumentParser(description="Pipeline Manager — Orchestrate the Website Builder pipeline")
     parser.add_argument("--sheet-url", help="Google Sheet URL with leads (default: LEADS_SHEET_URL from .env)")
-    parser.add_argument("--action", required=True, choices=["report", "process", "process-one", "send-emails"],
+    parser.add_argument("--action", choices=["report", "process", "process-one", "send-emails"],
                         help="Action to perform")
+    parser.add_argument("--find-lead", metavar="NAME", help="Fuzzy-search for a lead by business name")
     parser.add_argument("--lead-id", help="Lead ID (required for process-one)")
     parser.add_argument("--sender-name", help="Your name (required for process/process-one)")
     parser.add_argument("--sender-phone", help="Your phone (required for process/process-one)")
     parser.add_argument("--sender-email", help="Your email (required for process/process-one/send-emails)")
     parser.add_argument("--count", type=int, default=10, help="Number of emails to send (for send-emails action)")
+    parser.add_argument("--format", choices=["text", "json"], default="text",
+                        help="Output format: text (verbose) or json (compact)")
     args = parser.parse_args()
+
+    if not args.action and not args.find_lead:
+        parser.error("Either --action or --find-lead is required")
 
     # Resolve sheet URL: explicit arg > .env canonical > error
     sheet_url = args.sheet_url or CANONICAL_SHEET_URL
@@ -1354,8 +1421,8 @@ def main():
 
     # Validate args
     if args.action in ("process", "process-one", "send-emails"):
-        if not all([args.sender_name, args.sender_phone, args.sender_email]):
-            parser.error("--sender-name, --sender-phone, and --sender-email are required for process/process-one/send-emails")
+        if not all([args.sender_name, args.sender_email]):
+            parser.error("--sender-name and --sender-email are required for process/process-one/send-emails")
 
     if args.action == "process-one" and not args.lead_id:
         parser.error("--lead-id is required for process-one")
@@ -1367,10 +1434,26 @@ def main():
     }
 
     # Open sheet
-    print(f"\nOpening Google Sheet...")
+    if args.format == "text":
+        print(f"\nOpening Google Sheet...")
     spreadsheet, worksheet = open_sheet(sheet_url)
     sheet_title = spreadsheet.title
-    print(f"  Sheet: {sheet_title}")
+    if args.format == "text":
+        print(f"  Sheet: {sheet_title}")
+
+    # Handle --find-lead
+    if args.find_lead:
+        matches = find_lead_by_name(worksheet, args.find_lead)
+        if args.format == "json":
+            print(json.dumps({"query": args.find_lead, "matches": matches}, indent=2, ensure_ascii=False))
+        else:
+            if matches:
+                print(f"\n  Found {len(matches)} match(es) for '{args.find_lead}':")
+                for m in matches:
+                    print(f"    {m['business_name']} ({m['city']}) — ID: {m['lead_id']}, status: {m['status']}, score: {m['match_score']}")
+            else:
+                print(f"\n  No matches found for '{args.find_lead}'")
+        return
 
     # Execute action
     if args.action == "report":
@@ -1382,9 +1465,15 @@ def main():
     elif args.action == "process-one":
         result = action_process_one(worksheet, args.lead_id, sender_info)
 
+    # Output
+    if args.format == "json":
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+
     # Save result
-    output_path = save_intermediate(result, f"pipeline_{args.action}")
-    print(f"\n  Report saved to: {output_path}")
+    action_name = args.action or "find-lead"
+    output_path = save_intermediate(result, f"pipeline_{action_name}")
+    if args.format == "text":
+        print(f"\n  Report saved to: {output_path}")
 
 
 if __name__ == "__main__":

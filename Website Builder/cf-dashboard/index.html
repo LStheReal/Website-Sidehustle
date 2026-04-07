@@ -225,7 +225,7 @@ document.addEventListener('keydown', function(e) {
 <h1 class="hero-headline-l" style="font-size: clamp(3.2rem, 7.2vw, 6.2rem);font-family:'ClashDisplay',sans-serif;font-weight:700;letter-spacing:-.02em;line-height:1;">Ihre Website<span class="navbar-wordmark-dot">.</span>
 </h1>
 <div class="global-subline-div">
-<div class="hero-headline-s">Moderne Websites für kleine Unternehmen</div>
+<div class="hero-headline-s">Moderne Websiten für kleine Unternehmen</div>
 </div>
 </div>
 <div data-w-id="fd45b934-fe86-7222-d780-7ad33aaf0aa9" style="opacity:0" class="hero-txt-item-2">
@@ -1097,11 +1097,6 @@ a, button, [role="button"], input[type="submit"] { cursor: pointer !important; }
   min-width: 12.8rem;
   padding-left: 1.45rem !important;
   padding-right: 1.45rem !important;
-  transition: transform 0.2s ease;
-}
-.btn-div .primary-btn:hover,
-.btn-div .secondary-btn.in-nav:hover {
-  transform: scale(1.06);
 }
 
 .btn-div .btn-txt-container {
@@ -1115,6 +1110,18 @@ a, button, [role="button"], input[type="submit"] { cursor: pointer !important; }
 .btn-div .secondary-btn-txt {
   white-space: nowrap;
   line-height: 1;
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+.btn-div .primary-btn:hover .primary-btn-txt,
+.btn-div .secondary-btn.in-nav:hover .secondary-btn-txt {
+  transform: scale(1.15);
+}
+.btn-div .primary-btn,
+.btn-div .secondary-btn.in-nav,
+.btn-div .primary-btn *,
+.btn-div .secondary-btn.in-nav * {
+  cursor: pointer !important;
 }
 
 .cta-contact-bar {
@@ -1672,11 +1679,6 @@ a, button, [role="button"], input[type="submit"] { cursor: pointer !important; }
   min-width: 12.8rem;
   padding-left: 1.45rem !important;
   padding-right: 1.45rem !important;
-  transition: transform 0.2s ease;
-}
-.btn-div .primary-btn:hover,
-.btn-div .secondary-btn.in-nav:hover {
-  transform: scale(1.06);
 }
 
 body, body * { cursor: auto !important; }
@@ -1693,6 +1695,18 @@ a, button, [role="button"], input[type="submit"] { cursor: pointer !important; }
 .btn-div .secondary-btn-txt {
   white-space: nowrap;
   line-height: 1;
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+.btn-div .primary-btn:hover .primary-btn-txt,
+.btn-div .secondary-btn.in-nav:hover .secondary-btn-txt {
+  transform: scale(1.15);
+}
+.btn-div .primary-btn,
+.btn-div .secondary-btn.in-nav,
+.btn-div .primary-btn *,
+.btn-div .secondary-btn.in-nav * {
+  cursor: pointer !important;
 }
 
 .cta-contact-bar {

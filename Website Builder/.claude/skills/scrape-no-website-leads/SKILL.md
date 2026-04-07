@@ -21,7 +21,8 @@ Find businesses that lack a real website, verify they truly have none, enrich wi
 - `./scripts/scrape_google_maps.py` — Google Maps scraper via Apify
 - `./scripts/filter_no_website.py` — Smart 2-layer website filter (100+ blocked domains)
 - `./scripts/verify_no_website.py` — Domain probe verification (catches false positives)
-- `./scripts/update_sheet.py` — Google Sheets sync with deduplication
+- `./scripts/update_sheet.py` — Google Sheets sync with deduplication + contact quality filter
+- `./scripts/clean_leads.py` — Clean existing sheet: remove leads without contact info or with personal website emails
 
 ## Process — FOLLOW THESE STEPS EXACTLY
 
@@ -61,36 +62,70 @@ Output: `.tmp/local_ch_no_website_TIMESTAMP.json`
 - International or broader searches → use Google Maps
 - Maximum coverage → run both sources and deduplicate
 
-### Step 2: Enrich Contacts with WebSearch
+### Step 2: Enrich Contacts via Sonnet Agent
 
-After the script completes, use the **WebSearch tool** to find contact info for each business.
+After the script completes, spawn a **Sonnet agent** to enrich contacts. This keeps token costs low by avoiding sending the full conversation context.
 
-For each business in the output file, search:
+**How to do it:** Read the output file from Step 1, then spawn ONE agent (model: "sonnet") with all businesses in its prompt. The agent uses WebSearch to find contacts and returns structured JSON.
+
 ```
-"{business_name}" {city} Kontakt Email Inhaber
-```
+Agent(
+    model="sonnet",
+    description="Enrich lead contacts",
+    prompt="""You are a lead enrichment agent. For each business below, use WebSearch to find contact info.
+
+For each business, run these searches:
+1. "{business_name}" {city} Kontakt Email Inhaber
+2. "{business_name}" {city} Impressum
+3. "{business_name}" {city} Geschäftsführer
 
 Extract from search results:
-- **owner_name** — Owner/manager name
-- **owner_email** — Direct email
-- **emails** — All email addresses found
-- **facebook**, **instagram**, **linkedin** — Social media URLs
+- owner_name — Owner/manager name
+- owner_email — Direct email (MUST be from a real email provider like gmail.com, outlook.com, bluewin.ch, gmx.ch — NOT personal website domains)
+- owner_phone — Owner's direct phone
+- emails — All provider email addresses found (comma-separated)
+- facebook, instagram, linkedin — Social media profile URLs
 
-Tips:
-- Also try: `"{business_name}" {city} Impressum` (German legal page with contact info)
-- Also try: `"{business_name}" {city} Geschäftsführer` (managing director)
-- If no email found, note the phone number from Google Maps data (already in the file)
+IMPORTANT EMAIL RULES:
+- ONLY accept emails from known email providers (gmail.com, outlook.com, hotmail.com, bluewin.ch, gmx.ch, gmx.net, protonmail.com, yahoo.com, icloud.com, etc.)
+- REJECT any email ending with a business/personal website domain (e.g., info@malerei-mueller.ch, hello@spa-beauty.ch) — these businesses have no website so these emails likely don't work
+- If no provider email found, leave email fields empty — the phone from Google Maps is still useful
+
+After searching ALL businesses, write the results to a file at: {output_path}
+
+The file must be valid JSON — a list of objects, one per business, with this structure:
+[
+  {
+    "business_name": "...",
+    "owner_name": "...",
+    "owner_email": "...",
+    "owner_phone": "...",
+    "emails": ["..."],
+    "facebook": "...",
+    "instagram": "...",
+    "linkedin": "..."
+  }
+]
+
+Here are the businesses to enrich:
+{businesses_json}
+"""
+)
+```
+
+Replace `{businesses_json}` with the JSON array of businesses from Step 1 (include business_name, category, city, state, phone for each).
+Replace `{output_path}` with `.tmp/enriched_contacts_TIMESTAMP.json`.
 
 ### Step 3: Build Lead Records
 
-After enrichment, use the `flatten_lead()` function from `no_website_pipeline.py` to merge business data + extracted contacts into the 25-column lead schema.
+After the agent returns, read its output file and merge with the original business data using `flatten_lead()`:
 
 ```python
 from no_website_pipeline import flatten_lead
 
 lead = flatten_lead(
     gmaps_data=business,           # from pipeline output
-    contacts=extracted_contacts,    # from WebSearch enrichment
+    contacts=extracted_contacts,    # from agent's JSON output
     search_query="original search query"
 )
 ```
@@ -135,7 +170,7 @@ You do:
 3. For each business, WebSearch: "{name}" Zürich Kontakt Email Inhaber
 4. Build lead records with flatten_lead()
 5. Save to .tmp/leads_final.json
-6. Run update_sheet.py to upload to Google Sheets
+6. Run update_sheet.py to upload to Google Sheets (auto-builds draft websites for each new lead)
 7. Report: "Found 5 verified no-website businesses, enriched contacts for 4, saved to Google Sheets: [URL]"
 ```
 
@@ -158,9 +193,11 @@ You do:
 
 ```
 Source A: Google Maps → Filter (blocklist) → Verify (domain probe) ─┐
-                                                                     ├→ WebSearch enrichment → Sheet
+                                                                     ├→ Sonnet Agent (WebSearch enrichment) → Contact filter → Sheet
 Source B: local.ch → Filter (no website field) ─────────────────────┘
 ```
+
+**Why a Sonnet agent?** The enrichment step (WebSearch + extraction) is the most token-heavy part. Running it as a separate Sonnet agent avoids sending the full conversation context with every search query, cutting token costs by ~90%. Sonnet is more than capable for this structured extraction task.
 
 ### Pipeline Steps (Google Maps)
 1. **Google Maps Scrape** — Apify `compass/crawler-google-places` returns business listings

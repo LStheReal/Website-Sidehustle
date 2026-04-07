@@ -18,13 +18,20 @@ import os
 import sys
 import json
 import argparse
+import subprocess
 from dotenv import load_dotenv
 
 import gspread
 
 # Add project root to path for shared utilities
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+PROJECT_ROOT = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
+sys.path.insert(0, PROJECT_ROOT)
 from execution.google_auth import get_credentials
+
+# Import email validation from clean_leads
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, SCRIPT_DIR)
+from clean_leads import EMAIL_PROVIDERS, is_email_provider, extract_emails_from_cell
 
 load_dotenv()
 
@@ -257,9 +264,84 @@ def get_existing_lead_ids(worksheet) -> set:
         return set()
 
 
+def _lead_has_valid_contact(lead: dict) -> bool:
+    """Check if a lead has at least one usable contact method (email from provider or phone)."""
+    phone = (lead.get("phone") or "").strip()
+    owner_phone = (lead.get("owner_phone") or "").strip()
+    if phone or owner_phone:
+        return True
+
+    # Check emails
+    owner_email = (lead.get("owner_email") or "").strip()
+    emails_raw = lead.get("emails") or ""
+    if isinstance(emails_raw, list):
+        all_emails = emails_raw
+    else:
+        all_emails = extract_emails_from_cell(str(emails_raw))
+    if owner_email and owner_email not in all_emails:
+        all_emails.insert(0, owner_email)
+
+    return any(e.strip() for e in all_emails)
+
+
+def _lead_has_only_personal_website_emails(lead: dict) -> bool:
+    """Check if all emails are from personal website domains (not real email providers)."""
+    owner_email = (lead.get("owner_email") or "").strip()
+    emails_raw = lead.get("emails") or ""
+    if isinstance(emails_raw, list):
+        all_emails = emails_raw
+    else:
+        all_emails = extract_emails_from_cell(str(emails_raw))
+    if owner_email and owner_email not in all_emails:
+        all_emails.insert(0, owner_email)
+
+    if not all_emails:
+        return False  # No emails at all — handled by _lead_has_valid_contact
+
+    return not any(is_email_provider(e) for e in all_emails)
+
+
+def filter_contactable_leads(leads: list[dict]) -> tuple[list[dict], list[dict]]:
+    """
+    Filter leads to only those we can actually contact.
+    Removes:
+    - Leads with no email AND no phone
+    - Leads with only personal website emails and no phone
+
+    Returns:
+        Tuple of (contactable_leads, removed_leads)
+    """
+    contactable = []
+    removed = []
+
+    for lead in leads:
+        name = lead.get("business_name", "?")
+        phone = (lead.get("phone") or "").strip()
+        owner_phone = (lead.get("owner_phone") or "").strip()
+        has_phone = bool(phone or owner_phone)
+
+        if not _lead_has_valid_contact(lead):
+            removed.append((lead, "no contact info"))
+            print(f"  FILTERED OUT: {name} — no email or phone")
+            continue
+
+        if _lead_has_only_personal_website_emails(lead):
+            owner_email = (lead.get("owner_email") or "").strip()
+            removed.append((lead, f"personal website email: {owner_email}"))
+            print(f"  FILTERED OUT: {name} — non-provider email ({owner_email})")
+            continue
+
+        contactable.append(lead)
+
+    if removed:
+        print(f"\nContact filter: {len(contactable)} contactable, {len(removed)} removed")
+
+    return contactable, removed
+
+
 def append_leads_to_sheet(worksheet, leads: list[dict], existing_ids: set) -> int:
     """
-    Append new leads to the sheet, skipping duplicates.
+    Append new leads to the sheet, skipping duplicates and uncontactable leads.
 
     Args:
         worksheet: gspread Worksheet object.
@@ -274,7 +356,14 @@ def append_leads_to_sheet(worksheet, leads: list[dict], existing_ids: set) -> in
 
     if not new_leads:
         print("No new leads to add (all duplicates)")
-        return 0
+        return 0, []
+
+    # Filter out uncontactable leads
+    new_leads, removed = filter_contactable_leads(new_leads)
+
+    if not new_leads:
+        print("No contactable leads to add (all filtered out)")
+        return 0, []
 
     # Convert to rows
     rows = []
@@ -285,8 +374,68 @@ def append_leads_to_sheet(worksheet, leads: list[dict], existing_ids: set) -> in
     # Batch append
     worksheet.append_rows(rows, value_input_option="RAW")
 
+    new_ids = [lead.get("lead_id") for lead in new_leads]
     print(f"Added {len(new_leads)} new leads to sheet")
-    return len(new_leads)
+    return len(new_leads), new_ids
+
+
+def auto_build_drafts(sheet_url: str, new_lead_ids: list[str]):
+    """
+    Automatically build + deploy draft websites for newly added leads.
+    Calls the pipeline manager's process-one action for each new lead.
+    """
+    if not new_lead_ids:
+        return
+
+    sender_name = os.getenv("SENDER_NAME", "")
+    sender_phone = os.getenv("SENDER_PHONE", "")
+    sender_email = os.getenv("SENDER_EMAIL", os.getenv("SMTP_USER", ""))
+
+    if not sender_email:
+        print("\nSkipping auto-build: no SENDER_EMAIL or SMTP_USER in .env")
+        return
+
+    pipeline_script = os.path.join(
+        PROJECT_ROOT, ".claude", "skills", "pipeline-manager", "scripts", "pipeline_manager.py"
+    )
+
+    if not os.path.exists(pipeline_script):
+        print(f"\nSkipping auto-build: pipeline_manager.py not found at {pipeline_script}")
+        return
+
+    print(f"\n{'='*60}")
+    print(f"AUTO-BUILD: Building draft websites for {len(new_lead_ids)} new leads")
+    print(f"{'='*60}")
+
+    for i, lead_id in enumerate(new_lead_ids, 1):
+        print(f"\n  [{i}/{len(new_lead_ids)}] Processing lead {lead_id}...")
+        try:
+            result = subprocess.run(
+                [
+                    sys.executable, pipeline_script,
+                    "--sheet-url", sheet_url,
+                    "--action", "process-one",
+                    "--lead-id", lead_id,
+                    "--sender-name", sender_name,
+                    "--sender-phone", sender_phone,
+                    "--sender-email", sender_email,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=300,  # 5 min per lead
+            )
+            if result.returncode == 0:
+                print(f"    Done: draft websites built + deployed")
+            else:
+                print(f"    ERROR: {result.stderr[-200:] if result.stderr else 'Unknown error'}")
+        except subprocess.TimeoutExpired:
+            print(f"    TIMEOUT: Build took too long, skipping")
+        except Exception as e:
+            print(f"    ERROR: {e}")
+
+    print(f"\n{'='*60}")
+    print(f"AUTO-BUILD COMPLETE")
+    print(f"{'='*60}")
 
 
 def main():
@@ -294,6 +443,8 @@ def main():
     parser.add_argument("--input", required=True, help="Input JSON file with lead records")
     parser.add_argument("--sheet-url", help="Google Sheet URL to append to (default: LEADS_SHEET_URL from .env)")
     parser.add_argument("--sheet-name", help="Name for new sheet (only used when creating fresh, no existing URL)")
+    parser.add_argument("--no-auto-build", action="store_true",
+                        help="Skip automatic draft website building for new leads")
 
     args = parser.parse_args()
 
@@ -327,10 +478,17 @@ def main():
     print(f"Found {len(existing_ids)} existing leads in sheet")
 
     # Append new leads
-    added = append_leads_to_sheet(worksheet, leads, existing_ids)
+    added, new_ids = append_leads_to_sheet(worksheet, leads, existing_ids)
 
     print(f"\nSheet URL: {spreadsheet.url}")
     print(f"Total leads added: {added}")
+
+    # Auto-build draft websites for new leads
+    sheet_url = args.sheet_url or spreadsheet.url
+    if added > 0 and not args.no_auto_build:
+        auto_build_drafts(sheet_url, new_ids)
+    elif added > 0 and args.no_auto_build:
+        print(f"\nAuto-build skipped (--no-auto-build). Run pipeline-manager to process new leads.")
 
     return spreadsheet.url
 

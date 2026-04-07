@@ -52,35 +52,46 @@ Each template has different placeholders. Read the chosen template's SKILL.md to
 
 ### Step 3: Generate ALL Content
 
-This is the core of this skill. You (Claude) write every single text field for the website.
+Use the `generate_placeholders.py` script to generate all website text via a direct Sonnet API call. This is much cheaper than generating inline because it sends only the business data to the API, not the full conversation context.
 
-**Rules:**
-- All text in **German** (Swiss market, "Schweizerdeutsch-freundlich" but Hochdeutsch)
-- Adapt tone to the business type (law firm = formal, hair salon = friendly, tech startup = modern)
-- Use the customer's description as the primary source — don't invent facts
-- Parse values/highlights into stats, feature points, and selling propositions
-- Keep text concise — website copy, not essays
-- Hero titles: max 3-4 words per line, punchy
-- Service descriptions: 1-2 sentences each
-- Stats: use "15+", "500+", "100%" format
+```bash
+source .venv/bin/activate
+python3 .claude/skills/adapt-website/scripts/generate_placeholders.py \
+    --template-key {template_key} \
+    --business-name "{business_name}" \
+    --category "{category}" \
+    --city "{city}" \
+    --phone "{phone}" \
+    --email "{email}" \
+    --address "{address}" \
+    --description "{customer_description}" \
+    --values "{customer_values}" \
+    --opening-hours "{opening_hours}" \
+    --output .tmp/business_data.json
+```
 
-**Generate a complete `business_data.json`** with ALL placeholder keys filled. Example for BiA:
+This generates a complete `business_data.json` with ALL placeholder keys filled. Example output for BiA:
 
 ```json
 {
     "BUSINESS_NAME": "Diamant Falke Nagelstudio",
     "BUSINESS_NAME_SHORT": "Diamant.",
     "TAGLINE": "Ihr Nagelstudio in Luzern",
-    "META_DESCRIPTION": "Diamant Falke — Exklusives Nagelstudio für Gel-Nägel und Maniküre in Luzern",
-    "SECTION_LABEL_HERO": "Nagelkunst & Pflege",
     "HERO_TITLE_LINE1": "Perfektion",
     "HERO_TITLE_LINE2": "bis in die",
     "HERO_TITLE_LINE3": "Fingerspitzen.",
-    "INTRO_TEXT": "Willkommen bei Diamant Falke",
-    "INTRO_DESCRIPTION": "Seit 2018 verwöhnen wir unsere Kundinnen...",
     ...
 }
 ```
+
+**Review the output** — read `business_data.json` and check that the content sounds natural and is specific to this business. If any placeholders need adjustment, edit the JSON directly before proceeding to Step 4.
+
+**Quality rules** (enforced by the script's prompt):
+- All text in German (Hochdeutsch, Swiss market)
+- Tone adapts to business type
+- Hero titles: max 3-4 words per line
+- Stats: "15+", "500+", "100%" format
+- Services specific to the industry
 
 ### Step 4: Build the Website
 

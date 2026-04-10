@@ -26,6 +26,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 from execution.utils import save_intermediate
+from execution.retry_utils import retry_with_backoff
 
 
 def get_screenshot_url(website_url: str, custom_url: str | None = None) -> str:
@@ -281,6 +282,12 @@ Freundliche Grüsse
 
 # --- Email sending ---
 
+@retry_with_backoff(
+    max_attempts=3,
+    initial_delay=30.0,
+    backoff=2.0,
+    exceptions=(smtplib.SMTPException, OSError, TimeoutError),
+)
 def send_email(
     to_email: str,
     subject: str,
@@ -350,6 +357,12 @@ def send_email(
 
 # --- Google Sheets integration ---
 
+@retry_with_backoff(max_attempts=3, initial_delay=2.0, backoff=2.0)
+def _sheets_batch_update_with_retry(worksheet, cells):
+    """Retry wrapper for gspread batch_update — handles transient API errors."""
+    worksheet.batch_update(cells, value_input_option="USER_ENTERED")
+
+
 def update_sheet_status(sheet_url: str, lead_id: str):
     """Update lead status to email_sent with today's date."""
     import gspread
@@ -380,13 +393,13 @@ def update_sheet_status(sheet_url: str, lead_id: str):
         return
 
     COL_STATUS = 21
-    COL_EMAIL_SENT_DATE = 26
+    COL_EMAIL_SENT_DATE = 32  # matches pipeline_manager.py COL mapping
 
     cells = [
         {"range": rowcol_to_a1(row_idx, COL_STATUS), "values": [["email_sent"]]},
         {"range": rowcol_to_a1(row_idx, COL_EMAIL_SENT_DATE), "values": [[datetime.now().strftime("%Y-%m-%d")]]},
     ]
-    worksheet.batch_update(cells, value_input_option="USER_ENTERED")
+    _sheets_batch_update_with_retry(worksheet, cells)
     print(f"  Updated sheet: status → email_sent, email_sent_date → {datetime.now().strftime('%Y-%m-%d')}")
 
 

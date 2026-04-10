@@ -302,7 +302,7 @@ def verify_single_business(business: dict) -> dict:
 
 def verify_businesses(
     businesses: list[dict],
-    max_workers: int = 5,
+    max_workers: int = 8,
 ) -> tuple[list[dict], list[dict], dict]:
     """
     Verify a batch of businesses, removing those that actually have websites.

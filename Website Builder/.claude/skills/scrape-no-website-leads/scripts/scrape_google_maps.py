@@ -15,12 +15,25 @@ import sys
 import json
 import argparse
 from datetime import datetime
+from pathlib import Path
 from dotenv import load_dotenv
 from apify_client import ApifyClient
+
+# Make `execution.*` importable regardless of CWD.
+_ROOT = Path(__file__).resolve().parents[4]  # .../Website Builder
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+from execution.retry_utils import retry_with_backoff  # noqa: E402
 
 load_dotenv()
 
 ACTOR_ID = "compass/crawler-google-places"
+
+
+@retry_with_backoff(max_attempts=3, initial_delay=5.0, backoff=2.0)
+def _apify_call_with_retry(client, run_input: dict):
+    """Run the Apify actor with retry on transient failures."""
+    return client.actor(ACTOR_ID).call(run_input=run_input)
 
 
 def scrape_google_maps(
@@ -66,9 +79,9 @@ def scrape_google_maps(
     print(f"Starting Google Maps scrape: '{full_search}' (limit: {max_results})...")
 
     try:
-        run = client.actor(ACTOR_ID).call(run_input=run_input)
+        run = _apify_call_with_retry(client, run_input)
     except Exception as e:
-        print(f"Error running Apify actor: {e}", file=sys.stderr)
+        print(f"Error running Apify actor (after retries): {e}", file=sys.stderr)
         return []
 
     if not run:

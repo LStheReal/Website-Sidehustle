@@ -38,6 +38,7 @@ from execution.google_auth import get_credentials
 from execution.copy_enrichment import enrich_template_copy
 from execution.business_images import suggest_business_images
 from execution.website_storage import get_order_output_dir
+from execution.retry_utils import retry_with_backoff
 
 load_dotenv()
 
@@ -200,12 +201,22 @@ def get_or_create_lead_folder(drive_service, lead_id: str, business_name: str) -
     return folder["id"]
 
 
+@retry_with_backoff(max_attempts=3, initial_delay=2.0, backoff=2.0)
 def upload_file_to_drive(drive_service, folder_id: str, file_storage, filename: str) -> str:
-    """Upload a file from Flask request.files to a Drive folder. Returns web view link."""
+    """Upload a file from Flask request.files to a Drive folder. Returns web view link.
+
+    Retries 3x on transient errors (network, Drive API 5xx). The file_storage
+    stream is read into a BytesIO buffer so that retries don't hit an empty stream.
+    """
     from googleapiclient.http import MediaIoBaseUpload
 
+    # Read the stream once and cache the bytes so each retry starts from the beginning.
+    if not hasattr(file_storage, "_cached_bytes"):
+        file_storage._cached_bytes = file_storage.read()
+    data = file_storage._cached_bytes
+
     media = MediaIoBaseUpload(
-        io.BytesIO(file_storage.read()),
+        io.BytesIO(data),
         mimetype=file_storage.content_type or "application/octet-stream",
         resumable=True,
     )

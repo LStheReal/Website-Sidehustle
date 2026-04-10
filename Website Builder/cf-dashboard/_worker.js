@@ -17,7 +17,7 @@ const COLUMN_NAMES = [
   "domain_option_3_purchase","domain_option_3_price","website_url","email_sent_date",
   "response_date","notes","draft_url_1_earlydog","draft_url_2_bia","draft_url_3_liveblocks","draft_url_4_loveseen",
   "chosen_template","next_action","next_action_date","acquisition_source",
-  "form_business_name","form_description","form_values","form_phone","form_address",
+  "form_business_name","form_description","form_values","form_phone","form_address","form_services","form_strengths",
   "url_earlydog","url_bia","url_liveblocks","url_loveseen",
   "html_earlydog_drive_id","html_bia_drive_id","html_liveblocks_drive_id","html_loveseen_drive_id",
   "generation_status",
@@ -322,17 +322,19 @@ async function enrichWithAI(env, data, templateKey) {
   const name = data.BUSINESS_NAME || "";
   const category = data.category || "";
   const description = data._description || "";
-  const values = data._values || "";
+  const services = data._services || "";
+  const strengths = data._strengths || "";
   const city = data.city || "";
   // Skip AI if there's no meaningful input
-  if (!description && !values && !category && !name) return {};
+  if (!description && !services && !strengths && !category && !name) return {};
 
   const context = [
     name ? `Firmenname: ${name}` : "",
     category ? `Branche: ${category}` : "",
     city ? `Standort: ${city}` : "",
     description ? `Beschreibung vom Kunden: ${description}` : "",
-    values ? `Werte/Besonderheiten vom Kunden: ${values}` : "",
+    services ? `Leistungen vom Kunden: ${services}` : "",
+    strengths ? `Besonderheiten/Stärken vom Kunden: ${strengths}` : "",
   ].filter(Boolean).join("\n");
 
   const prompt = `Du bist ein Webseiten-Texter für Schweizer KMU. Erstelle professionelle, authentische deutsche Texte für eine Firmenwebsite.
@@ -341,9 +343,9 @@ Firma-Info:
 ${context}
 
 WICHTIGE REGELN:
-1. Die Texte vom Kunden (Beschreibung und Werte/Besonderheiten) sind die WICHTIGSTE Grundlage. Verwende sie als Basis für alle Texte. Du darfst umformulieren und professionell aufbereiten, aber der Inhalt MUSS dem entsprechen, was der Kunde geschrieben hat.
-2. Erfinde KEINE Dienstleistungen, die der Kunde nicht erwähnt hat. Wenn der Kunde nur 1-2 Leistungen nennt, fülle die restlichen SERVICE-Felder mit "".
-3. Erfinde KEINE konkreten Zahlen oder Statistiken (z.B. "500+ Kunden", "20 Jahre"). Verwende NUR Zahlen, die der Kunde explizit genannt hat. Wenn keine Zahlen genannt: verwende beschreibende Wörter wie "Persönlich", "Regional", "Zuverlässig" für STAT-Felder.
+1. Die Texte vom Kunden (Beschreibung, Leistungen, Besonderheiten) sind die WICHTIGSTE Grundlage. Verwende sie als Basis für alle Texte. Du darfst umformulieren und professionell aufbereiten, aber der Inhalt MUSS dem entsprechen, was der Kunde geschrieben hat.
+2. Verwende die Leistungen des Kunden DIREKT als SERVICE_1/2/3 Titel und Beschreibungen. Erfinde KEINE anderen Leistungen. Wenn der Kunde nur 1-2 Leistungen nennt, fülle die restlichen SERVICE-Felder mit "".
+3. Verwende die Besonderheiten/Stärken des Kunden DIREKT für FEATURE_POINT, VALUE und STAT Felder. Erfinde KEINE konkreten Zahlen oder Statistiken (z.B. "500+ Kunden", "20 Jahre"). Verwende NUR Zahlen, die der Kunde explizit genannt hat. Wenn keine Zahlen: verwende beschreibende Wörter wie "Persönlich", "Regional", "Zuverlässig".
 4. Erfinde KEINE Social-Media-Handles, Instagram-Namen, URLs oder E-Mail-Adressen.
 5. Wenn der Kunde wenig Info gegeben hat: schreibe kürzere, allgemeinere Texte. Weniger Text ist besser als falscher Text. Setze Felder auf "" wenn du keinen passenden Inhalt hast.
 6. Schreibe natürlich und professionell auf Deutsch (Schweizer Stil, kein ß). Verwende immer echte Umlaute (ä, ö, ü, Ä, Ö, Ü) — NIEMALS ae, oe, ue schreiben.
@@ -439,7 +441,7 @@ async function mergeWithDefaults(env, templateKey, leadData, quickMode = false) 
   }
 
   // AI text enrichment — generates unique copy based on business info
-  const aiText = await enrichWithAI(env, { ...merged, _description: leadData._description || "", _values: leadData._values || "" }, templateKey);
+  const aiText = await enrichWithAI(env, { ...merged, _description: leadData._description || "", _services: leadData._services || "", _strengths: leadData._strengths || "" }, templateKey);
   let aiCategory = "";
   for (const [key, value] of Object.entries(aiText)) {
     if (key === "CATEGORY") {
@@ -463,7 +465,7 @@ async function mergeWithDefaults(env, templateKey, leadData, quickMode = false) 
   }
 
   // Fetch Pexels images for IMAGE_* slots not explicitly set by user uploads
-  const hasBusinessContext = !!(leadData._description || leadData._values || leadData.category || (leadData.BUSINESS_NAME && leadData.BUSINESS_NAME !== ""));
+  const hasBusinessContext = !!(leadData._description || leadData._services || leadData._strengths || leadData.category || (leadData.BUSINESS_NAME && leadData.BUSINESS_NAME !== ""));
   const slotMap = IMAGE_SLOT_MAP[templateKey] || {};
   if (hasBusinessContext) {
     if (aiCategory) merged.category = aiCategory;
@@ -505,10 +507,15 @@ function leadToPlaceholderData(lead, customizations) {
   if (cust.phone) { data.PHONE = cust.phone; data.PHONE_SHORT = cust.phone; }
   if (cust.address) data.ADDRESS = cust.address;
 
-  // Pass description + values as AI context — NOT as direct placeholder overrides.
+  // Pass description, services, strengths as AI context — NOT as direct placeholder overrides.
   // These are used by enrichWithAI() to generate proper unique text for each section.
   if (cust.description) data._description = cust.description.trim();
-  if (cust.values) data._values = cust.values.trim();
+  if (cust.services) data._services = cust.services.trim();
+  if (cust.strengths) data._strengths = cust.strengths.trim();
+  // Legacy fallback: old "values" field maps to strengths
+  if (!cust.services && !cust.strengths && cust.values) {
+    data._strengths = cust.values.trim();
+  }
 
   return data;
 }
@@ -689,6 +696,7 @@ async function handleGetLead(leadId, env, ctx) {
     chosen_template: lead.chosen_template, notes: lead.notes, acquisition_source: lead.acquisition_source,
     form_business_name: lead.form_business_name, form_description: lead.form_description,
     form_values: lead.form_values, form_phone: lead.form_phone, form_address: lead.form_address,
+    form_services: lead.form_services, form_strengths: lead.form_strengths,
     url_earlydog: lead.url_earlydog, url_bia: lead.url_bia, url_liveblocks: lead.url_liveblocks, url_loveseen: lead.url_loveseen,
     generation_status: lead.generation_status,
     html_earlydog_drive_id: lead.html_earlydog_drive_id, html_bia_drive_id: lead.html_bia_drive_id,
@@ -721,35 +729,8 @@ async function handleRegister(request, env) {
   let accessToken;
   try { accessToken = await getAccessToken(env); } catch (e) { return jsonResp({ error: "Verbindungsfehler." }, 500); }
 
-  // Check if this email already has a lead (dedup)
-  try {
-    const sheetData = await getSheetValues(accessToken, env.LEADS_SHEET_ID);
-    const rows = sheetData.values || [];
-    const emailIdx = COLUMN_NAMES.indexOf("owner_email");
-    for (let i = 1; i < rows.length; i++) {
-      if ((rows[i][emailIdx] || "").trim().toLowerCase() === email) {
-        // Return existing lead instead of creating a duplicate
-        const existingLead = { _row_idx: i + 1 };
-        COLUMN_NAMES.forEach((name, j) => { existingLead[name] = rows[i][j] || ""; });
-        console.log("[register] Existing lead found for", email, "→", existingLead.lead_id);
-        return jsonResp({
-          lead_id: existingLead.lead_id,
-          business_name: existingLead.business_name,
-          category: existingLead.category,
-          city: existingLead.city,
-          phone: existingLead.phone,
-          owner_email: existingLead.owner_email,
-          owner_name: existingLead.owner_name,
-          address: existingLead.address,
-          status: existingLead.status,
-          previews: TEMPLATE_KEYS.map(t => `/api/preview/${existingLead.lead_id}/${t}`),
-          domains: [],
-          chosen_template: existingLead.chosen_template,
-          notes: existingLead.notes,
-        });
-      }
-    }
-  } catch (e) { console.error("Dedup check error:", e); }
+  // Always create a new lead — no dedup. No-code users start fresh every session.
+  // To return to an existing site, users must use their access code (lead_id).
 
   // Generate a 12-char hex lead_id from email + timestamp
   const encoder = new TextEncoder();
@@ -845,7 +826,8 @@ async function handleOrder(leadId, request, env) {
   if (!lead) return jsonResp({ error: "Lead not found" }, 404);
   const fd = await request.formData();
   const chosenTemplate = fd.get("chosen_template")||"", description = fd.get("description")||"";
-  const values = fd.get("values")||"", selectedDomain = fd.get("selected_domain")||"";
+  const services = fd.get("services")||"", strengths = fd.get("strengths")||"";
+  const selectedDomain = fd.get("selected_domain")||"";
   const phone = fd.get("phone")||"", address = fd.get("address")||"";
   if (fd.get("agreed_to_terms") !== "true") return jsonResp({ error: "AGB müssen akzeptiert werden." }, 400);
   if (!chosenTemplate) return jsonResp({ error: "Kein Template gewählt." }, 400);
@@ -875,7 +857,7 @@ async function handleOrder(leadId, request, env) {
     console.log("Using cached preview HTML for", leadId);
   } else {
     try {
-      const result = await generateFinalHTML(env, request.url, chosenTemplate, leadId, description, values, logo, images, phone, address);
+      const result = await generateFinalHTML(env, request.url, chosenTemplate, leadId, description, services, strengths, logo, images, phone, address);
       finalHtml = result.html;
     } catch (e) { console.error("HTML generation error:", e); }
   }
@@ -897,7 +879,7 @@ async function handleOrder(leadId, request, env) {
   const now = new Date().toISOString();
   const updates = {
     chosen_template: chosenTemplate,
-    notes: JSON.stringify({ order_date: now, description, values, selected_domain: selectedDomain, drive_folder: driveFolderUrl, project_name: projectName }),
+    notes: JSON.stringify({ order_date: now, description, services, strengths, selected_domain: selectedDomain, drive_folder: driveFolderUrl, project_name: projectName }),
     status: liveUrl ? "website_created" : "website_creating",
     next_action: "AWAITING PAYMENT",
     next_action_date: now.slice(0,10),
@@ -936,10 +918,12 @@ async function handlePreview(leadId, templateKey, request, env, ctx) {
 
   const url = new URL(request.url);
   const cust = {
-    description: url.searchParams.get("description") || "",
-    values: url.searchParams.get("values") || "",
-    phone: url.searchParams.get("phone") || "",
-    address: url.searchParams.get("address") || "",
+    description: url.searchParams.get("description") || (lead ? (lead.form_description || "") : ""),
+    services: url.searchParams.get("services") || (lead ? (lead.form_services || "") : ""),
+    strengths: url.searchParams.get("strengths") || (lead ? (lead.form_strengths || "") : ""),
+    values: url.searchParams.get("values") || (lead ? (lead.form_values || "") : ""),
+    phone: url.searchParams.get("phone") || (lead ? (lead.form_phone || lead.phone || "") : ""),
+    address: url.searchParams.get("address") || (lead ? (lead.form_address || lead.address || "") : ""),
   };
   // Build placeholder data — works with or without a lead record
   const fakeLead = { business_name: url.searchParams.get("business_name") || "" };
@@ -1007,7 +991,7 @@ function arrayBufferToBase64(buffer) {
 
 // ── Generate Final HTML (shared between preview + order) ──
 // Uses new generation pipeline: template defaults + Pexels images + placeholder fill
-async function generateFinalHTML(env, requestUrl, templateKey, leadId, description, values, logoFile, imageFiles, phone, address) {
+async function generateFinalHTML(env, requestUrl, templateKey, leadId, description, services, strengths, logoFile, imageFiles, phone, address) {
   if (!TEMPLATE_KEYS.includes(templateKey)) throw new Error("Template not found: " + templateKey);
 
   // 1. Get template HTML (use raw templates with {{PLACEHOLDER}} patterns)
@@ -1027,7 +1011,7 @@ async function generateFinalHTML(env, requestUrl, templateKey, leadId, descripti
   } catch (e) { console.error("Lead lookup error:", e); }
 
   // 3. Build placeholder data from lead + anpassen customizations
-  const cust = { description, values, phone: phone || "", address: address || "" };
+  const cust = { description, services, strengths, phone: phone || "", address: address || "" };
   const placeholderData = leadToPlaceholderData(lead || { business_name: "" }, cust);
 
   // 4. Process uploaded images — convert to data URLs for override
@@ -1094,11 +1078,12 @@ async function handlePreviewWithImages(request, env) {
     const leadId = fd.get("lead_id") || "";
     const templateKey = fd.get("template") || "";
     const description = fd.get("description") || "";
-    const values = fd.get("values") || "";
+    const services = fd.get("services") || "";
+    const strengths = fd.get("strengths") || "";
     const phone = fd.get("phone") || "";
     const address = fd.get("address") || "";
     const result = await generateFinalHTML(
-      env, request.url, templateKey, leadId, description, values,
+      env, request.url, templateKey, leadId, description, services, strengths,
       fd.get("logo"), fd.getAll("images"), phone, address
     );
     const html = result.html;
@@ -1821,6 +1806,8 @@ async function handleSaveForm(leadId, request, env) {
   const updates = {};
   if (body.business_name) { updates.form_business_name = body.business_name; updates.business_name = body.business_name; }
   if (body.description) updates.form_description = body.description;
+  if (body.services) updates.form_services = body.services;
+  if (body.strengths) updates.form_strengths = body.strengths;
   if (body.values) updates.form_values = body.values;
   if (body.phone !== undefined) { updates.form_phone = body.phone; if (body.phone) updates.phone = body.phone; }
   if (body.address !== undefined) { updates.form_address = body.address; if (body.address) updates.address = body.address; }
@@ -1828,6 +1815,8 @@ async function handleSaveForm(leadId, request, env) {
   // Also store in notes JSON for backward compatibility
   const existingNotes = lead.notes ? (() => { try { return JSON.parse(lead.notes); } catch { return {}; } })() : {};
   if (body.description) existingNotes.description = body.description;
+  if (body.services) existingNotes.services = body.services;
+  if (body.strengths) existingNotes.strengths = body.strengths;
   if (body.values) existingNotes.values = body.values;
   updates.notes = JSON.stringify(existingNotes);
 
@@ -1873,7 +1862,8 @@ async function handleGenerateAll(leadId, request, env, ctx) {
   ctx.waitUntil((async () => {
     // Use form data from body (freshest) with sheet data as fallback
     const description = bodyData.description || lead.form_description || "";
-    const values = bodyData.values || lead.form_values || "";
+    const services = bodyData.services || lead.form_services || "";
+    const strengths = bodyData.strengths || lead.form_strengths || "";
     const phone = bodyData.phone || lead.form_phone || lead.phone || "";
     const address = bodyData.address || lead.form_address || lead.address || "";
     const businessName = bodyData.business_name || lead.form_business_name || lead.business_name || "";
@@ -1881,14 +1871,14 @@ async function handleGenerateAll(leadId, request, env, ctx) {
     const email = lead.owner_email || lead.emails || "";
 
     // ── SHARED STEP 1: Build lead placeholder data ONCE ──
-    const cust = { description, values, phone, address };
+    const cust = { description, services, strengths, phone, address };
     const placeholderData = leadToPlaceholderData(lead, cust);
 
     // ── SHARED STEP 2: Call AI enrichment ONCE (same for all templates) ──
     let aiText = {};
     let aiCategory = "";
     try {
-      aiText = await enrichWithAI(env, { ...TEMPLATE_DEFAULTS.bia, ...placeholderData, _description: placeholderData._description || "", _values: placeholderData._values || "" }, "bia");
+      aiText = await enrichWithAI(env, { ...TEMPLATE_DEFAULTS.bia, ...placeholderData, _description: placeholderData._description || "", _services: placeholderData._services || "", _strengths: placeholderData._strengths || "" }, "bia");
       if (aiText.CATEGORY) { aiCategory = aiText.CATEGORY; delete aiText.CATEGORY; }
     } catch (e) { console.error("Shared AI enrichment error:", e); }
 
@@ -2042,6 +2032,9 @@ async function handleChatEdit(leadId, request, env) {
   const bizName = biz.business_name || "unbekannt";
   const bizCategory = biz.category || "";
   const bizDescription = biz.description || "";
+  const bizValues = biz.values || "";
+  const bizPhone = biz.phone || "";
+  const bizAddress = biz.address || "";
 
   const systemPrompt = `Du bist ein freundlicher Website-Editor-Assistent für Schweizer KMU. Du hilfst Kunden, ihre Website anzupassen.
 
@@ -2049,6 +2042,9 @@ Geschäftskontext:
 - Firma: ${bizName}
 - Branche: ${bizCategory}
 - Beschreibung: ${bizDescription}
+- Werte & Besonderheiten: ${bizValues}
+- Telefon: ${bizPhone}
+- Adresse: ${bizAddress}
 
 Du erhältst den aktuellen HTML-Code der Website und eine Nachricht vom Kunden.
 
@@ -2057,20 +2053,24 @@ WICHTIG — Antworte IMMER als gültiges JSON-Objekt mit genau einem dieser Form
 oder
 {"type": "chat", "message": "Deine Antwort an den Kunden"}
 
+BILDER — SEHR WICHTIG:
+- Im HTML gibt es Bildplatzhalter im Format src="[BILD_0]", src="[BILD_1]" usw. Diese sind echte eingebettete Bilder des Kunden. Du MUSST sie exakt beibehalten — lösche oder ersetze sie NIEMALS durch etwas anderes.
+- Wenn der Kunde sagt "tausche das Bild aus" oder "ändere das Bild": Antworte mit "type": "chat" und erkläre, dass er das Kamera-Symbol unten links verwenden soll um ein neues Bild hochzuladen — dann tauschst du es ein.
+- Wenn der Kunde dir eine Bild-URL (https://...) oder data:image/... gibt: verwende diese direkt im src-Attribut des betreffenden img-Tags.
+
 Regeln:
 - Verwende "type": "edit" NUR wenn du tatsächlich das HTML änderst. Gib dann das VOLLSTÄNDIGE geänderte HTML im "html"-Feld zurück.
 - Verwende "type": "chat" wenn der Kunde eine Frage stellt, etwas Unmögliches verlangt, oder du Klarstellung brauchst.
-- Halte dich STRIKT an den Geschäftskontext. Ändere NIEMALS Texte so, dass sie nichts mehr mit der Firma zu tun haben. Wenn der Kunde z.B. ein Bild ändern will, ändere NUR das Bild — nicht den Text.
+- Halte dich STRIKT an den Geschäftskontext. Ändere NIEMALS Texte so, dass sie nichts mehr mit der Firma zu tun haben.
 - Ändere NUR das, was der Kunde explizit verlangt. Behalte alle anderen Texte, Bilder, Styles und Struktur exakt bei.
 - Schreibe auf Deutsch (Schweizer Stil, kein ß).
 - Verwende immer echte Umlaute (ä, ö, ü, Ä, Ö, Ü) — NIEMALS ae, oe, ue schreiben.
 - Variiere deine Antworten im "message"-Feld — sei natürlich und freundlich, nicht roboterhaft.
-- Wenn ein Bild-URL als data:image/... angegeben wird, verwende diese URL direkt im src-Attribut.
 
 Was du KANNST:
 - Texte ändern (Überschriften, Absätze, Button-Texte)
 - Farben und einfache Styles anpassen
-- Bilder austauschen (wenn eine URL oder data:image gegeben wird)
+- Bilder austauschen (NUR wenn der Kunde eine konkrete URL oder data:image liefert)
 - Abschnitte umordnen oder entfernen
 - Neue Textabschnitte hinzufügen
 - Schriftarten anpassen
@@ -2088,14 +2088,14 @@ Bei Anfragen die du nicht umsetzen kannst, antworte freundlich und verweise auf 
     // Build messages array with conversation history
     const messages = [];
     if (history && Array.isArray(history)) {
-      const recent = history.slice(-10);
+      const recent = history.slice(-6); // limit history to last 3 exchanges
       for (const turn of recent) {
         if (turn.role && turn.content) {
           messages.push({ role: turn.role, content: turn.content });
         }
       }
     }
-    // Current request with HTML context
+    // Current request with HTML context (data URLs already stripped client-side)
     messages.push({
       role: "user",
       content: `Aktuelle Website:\n${html}\n\nKundenanfrage: ${message}`,
@@ -2222,6 +2222,63 @@ async function handleSaveHtml(leadId, request, env) {
   }
 
   return jsonResp({ success: true, live_url: liveUrl });
+}
+
+// ── Save HTML draft to Drive only (no redeploy) ──────────
+async function handleSaveHtmlDraft(leadId, request, env) {
+  if (!leadId) return jsonResp({ error: "Invalid lead ID" }, 400);
+  let body;
+  try { body = await request.json(); } catch { return jsonResp({ error: "Ungültige Anfrage." }, 400); }
+  const { html, template_key } = body;
+  if (!html || !template_key) return jsonResp({ error: "HTML und Template sind erforderlich." }, 400);
+  if (!TEMPLATE_KEYS.includes(template_key)) return jsonResp({ error: "Ungültiges Template." }, 400);
+
+  let accessToken;
+  try { accessToken = await getAccessToken(env); } catch { return jsonResp({ error: "Verbindungsfehler." }, 500); }
+  const sheetData = await getSheetValues(accessToken, env.LEADS_SHEET_ID);
+  const lead = findLead(sheetData, leadId);
+  if (!lead) return jsonResp({ error: "Lead nicht gefunden." }, 404);
+
+  try {
+    const folderId = await getOrCreateFolder(accessToken, env.DRIVE_UPLOAD_FOLDER_ID, `${lead.business_name || leadId} (${leadId})`);
+    const encoder = new TextEncoder();
+    const htmlBytes = encoder.encode(html);
+    const fileId = await uploadFileToDrive(accessToken, folderId, htmlBytes, `${template_key}-draft.html`, "text/html");
+    if (fileId) {
+      const updates = {};
+      updates[`html_${template_key}_drive_id`] = fileId;
+      await updateCells(accessToken, env.LEADS_SHEET_ID, lead._row_idx, updates);
+      return jsonResp({ success: true, drive_id: fileId });
+    }
+  } catch (e) { console.error("Draft save error:", e); }
+  return jsonResp({ success: false });
+}
+
+// ── Fetch saved HTML from Drive by template ──────────────
+async function handleGetSavedHtml(leadId, templateKey, env) {
+  if (!leadId || !templateKey) return jsonResp({ error: "Invalid params" }, 400);
+  if (!TEMPLATE_KEYS.includes(templateKey)) return jsonResp({ error: "Ungültiges Template." }, 400);
+
+  let accessToken;
+  try { accessToken = await getAccessToken(env); } catch { return jsonResp({ error: "Verbindungsfehler." }, 500); }
+  const sheetData = await getSheetValues(accessToken, env.LEADS_SHEET_ID);
+  const lead = findLead(sheetData, leadId);
+  if (!lead) return jsonResp({ error: "Lead nicht gefunden." }, 404);
+
+  const driveId = lead[`html_${templateKey}_drive_id`];
+  if (!driveId) return jsonResp({ html: null });
+
+  try {
+    const resp = await fetch(`https://www.googleapis.com/drive/v3/files/${driveId}?alt=media`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!resp.ok) return jsonResp({ html: null });
+    const html = await resp.text();
+    return jsonResp({ html: html || null });
+  } catch (e) {
+    console.error("Drive fetch error:", e);
+    return jsonResp({ html: null });
+  }
 }
 
 // ── Send Code Email (no-code users) ──────────────────────
@@ -2367,6 +2424,14 @@ export default {
         // POST /api/lead/:id/save-html (save edited HTML to Drive + redeploy)
         const saveHtmlMatch = path.match(/^\/api\/lead\/([^\/]+)\/save-html$/);
         if (saveHtmlMatch && request.method === "POST") return handleSaveHtml(saveHtmlMatch[1], request, env);
+
+        // POST /api/lead/:id/save-html-draft (Drive-only save, no redeploy)
+        const saveDraftMatch = path.match(/^\/api\/lead\/([^\/]+)\/save-html-draft$/);
+        if (saveDraftMatch && request.method === "POST") return handleSaveHtmlDraft(saveDraftMatch[1], request, env);
+
+        // GET /api/lead/:id/saved-html/:template (fetch saved HTML from Drive)
+        const getSavedHtmlMatch = path.match(/^\/api\/lead\/([^\/]+)\/saved-html\/([^\/]+)$/);
+        if (getSavedHtmlMatch && request.method === "GET") return handleGetSavedHtml(getSavedHtmlMatch[1], getSavedHtmlMatch[2], env);
 
         // POST /api/lead/:id/end-session (deploy check + send code email)
         const endSessionMatch = path.match(/^\/api\/lead\/([^\/]+)\/end-session$/);

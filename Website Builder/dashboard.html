@@ -71,7 +71,7 @@
                     <div class="db-card-icon">&#128274;</div>
                     <h2 class="db-card-title">Ich habe einen Code</h2>
                     <p class="db-card-desc">Gib den Code ein, den du per E-Mail erhalten hast.</p>
-                    <form id="leadForm" autocomplete="off">
+                    <form id="leadForm" autocomplete="off" onsubmit="return false">
                         <div class="db-input-wrap">
                             <input class="db-input" type="text" id="leadIdInput" placeholder="z.B. a1b2c3d4e5f6" required>
                             <div class="db-error" id="leadIdError"></div>
@@ -84,7 +84,7 @@
                     <div class="db-card-icon">&#9993;</div>
                     <h2 class="db-card-title">Kein Code?</h2>
                     <p class="db-card-desc">Kein Problem! Starte direkt mit deiner E-Mail-Adresse.</p>
-                    <form id="emailForm" autocomplete="off">
+                    <form id="emailForm" autocomplete="off" onsubmit="return false">
                         <div class="db-input-wrap">
                             <input class="db-input" type="email" id="emailInput" placeholder="deine@email.ch" required>
                             <div class="db-error" id="emailError"></div>
@@ -323,7 +323,7 @@
     <iframe class="db-preview-overlay-iframe" id="previewOverlayIframe" src="about:blank"></iframe>
 </div>
 
-<script src="dashboard.js"></script>
+<script src="dashboard.js?v=20260410"></script>
 
 <!-- Modal system (shared with landing page) -->
 <script>

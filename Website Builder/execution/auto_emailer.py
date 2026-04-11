@@ -29,6 +29,7 @@ import html as html_lib
 import json
 import os
 import sys
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -431,7 +432,9 @@ def main():
     try:
         result = run(args.sheet_id, args.dry_run, args.lead_id)
     except Exception as exc:
-        log.error("auto_emailer crashed", error=repr(exc))
+        log.error("auto_emailer crashed",
+                  error=repr(exc),
+                  traceback=traceback.format_exc())
         sys.exit(1)
 
     # Final summary line to stdout — easy to grep in GitHub Actions logs.

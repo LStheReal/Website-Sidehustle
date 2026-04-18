@@ -118,7 +118,7 @@ a { text-decoration: none; color: inherit; }
 .db-help-link {
     font-size: 0.78rem;
     font-weight: 600;
-    color: var(--lgrey);
+    color: #aaa;
     white-space: nowrap;
     transition: color 0.2s;
     flex-shrink: 0;
@@ -160,7 +160,7 @@ a { text-decoration: none; color: inherit; }
     justify-content: center;
     font-size: 0.72rem;
     font-weight: 700;
-    color: var(--grey);
+    color: #aaa;
     transition: all 0.35s var(--ease);
     flex-shrink: 0;
 }
@@ -175,7 +175,7 @@ a { text-decoration: none; color: inherit; }
 }
 .db-progress-label {
     font-size: 0.72rem;
-    color: var(--grey);
+    color: #aaa;
     font-weight: 500;
     white-space: nowrap;
     transition: color 0.35s var(--ease);
@@ -283,7 +283,7 @@ a { text-decoration: none; color: inherit; }
 
 .db-card-desc {
     font-size: 0.88rem;
-    color: var(--lgrey);
+    color: #aaa;
     line-height: 1.5;
     margin-bottom: 1.5rem;
 }
@@ -309,7 +309,7 @@ a { text-decoration: none; color: inherit; }
 }
 .db-subtext {
     font-size: 0.95rem;
-    color: var(--lgrey);
+    color: #aaa;
     line-height: 1.55;
     margin-bottom: 2rem;
 }
@@ -333,7 +333,7 @@ a { text-decoration: none; color: inherit; }
     outline: none;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
-.db-input::placeholder { color: var(--grey); }
+.db-input::placeholder { color: #888; }
 .db-input:focus {
     border-color: var(--green);
     box-shadow: 0 0 0 2px rgba(166, 255, 0, 0.15);
@@ -370,7 +370,7 @@ a { text-decoration: none; color: inherit; }
     min-height: 80px;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
-.db-textarea::placeholder { color: var(--grey); }
+.db-textarea::placeholder { color: #888; }
 .db-textarea:focus {
     border-color: var(--green);
     box-shadow: 0 0 0 2px rgba(166, 255, 0, 0.15);
@@ -383,7 +383,7 @@ a { text-decoration: none; color: inherit; }
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: var(--lgrey);
+    color: #aaa;
     margin-bottom: 0.5rem;
 }
 .db-input-group {
@@ -399,7 +399,7 @@ a { text-decoration: none; color: inherit; }
     border-radius: 14px;
     border: 1.5px dashed var(--stroke);
     background: transparent;
-    color: var(--grey);
+    color: #aaa;
     font-size: 0.85rem;
     font-family: var(--font);
     cursor: pointer;
@@ -486,7 +486,7 @@ a { text-decoration: none; color: inherit; }
 }
 .db-btn-ghost {
     background: transparent;
-    color: var(--lgrey);
+    color: #aaa;
     border: 0.5px solid var(--stroke);
 }
 .db-btn-ghost:hover { border-color: var(--lgrey); color: var(--white); }
@@ -518,7 +518,7 @@ a { text-decoration: none; color: inherit; }
     display: inline-block;
     margin-top: 1.5rem;
     font-size: 0.85rem;
-    color: var(--grey);
+    color: #aaa;
     transition: color 0.2s;
 }
 .db-back-link:hover { color: var(--white); }
@@ -561,7 +561,7 @@ a { text-decoration: none; color: inherit; }
 }
 .db-tpl-desc {
     font-size: 0.82rem;
-    color: var(--lgrey);
+    color: #aaa;
     margin-bottom: 0.75rem;
 }
 .db-tpl-tags {
@@ -576,7 +576,7 @@ a { text-decoration: none; color: inherit; }
     background: var(--card2);
     font-size: 0.68rem;
     font-weight: 600;
-    color: var(--lgrey);
+    color: #aaa;
     white-space: nowrap;
 }
 
@@ -623,7 +623,7 @@ a { text-decoration: none; color: inherit; }
     border: 0.5px solid var(--stroke);
     font-size: 0.75rem;
     font-weight: 600;
-    color: var(--lgrey);
+    color: #aaa;
     margin-bottom: 1.5rem;
 }
 .db-badge-dot {
@@ -640,7 +640,7 @@ a { text-decoration: none; color: inherit; }
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: var(--lgrey);
+    color: #aaa;
     margin-bottom: 1.25rem;
     padding-bottom: 0.75rem;
     border-bottom: 0.5px solid var(--stroke);
@@ -658,7 +658,7 @@ a { text-decoration: none; color: inherit; }
 }
 .db-field-hint {
     font-size: 0.78rem;
-    color: var(--grey);
+    color: #aaa;
     margin: -0.25rem 0 0.75rem;
     line-height: 1.5;
 }
@@ -769,7 +769,7 @@ a { text-decoration: none; color: inherit; }
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: var(--lgrey);
+    color: #aaa;
     margin-bottom: 1rem;
 }
 .db-review-row {
@@ -782,7 +782,7 @@ a { text-decoration: none; color: inherit; }
 .db-review-row:last-child { border-bottom: none; }
 .db-review-key {
     font-size: 0.85rem;
-    color: var(--lgrey);
+    color: #aaa;
     flex-shrink: 0;
     min-width: 130px;
 }
@@ -815,7 +815,7 @@ a { text-decoration: none; color: inherit; }
 }
 .db-review-price-label {
     font-size: 0.85rem;
-    color: var(--lgrey);
+    color: #aaa;
     margin-top: 0.35rem;
 }
 
@@ -828,10 +828,10 @@ a { text-decoration: none; color: inherit; }
     cursor: pointer;
 }
 .db-checkbox {
-    width: 20px;
-    height: 20px;
-    border-radius: 5px;
-    border: 1.5px solid var(--stroke);
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 2px solid #777;
     background: transparent;
     display: flex;
     align-items: center;
@@ -848,20 +848,20 @@ a { text-decoration: none; color: inherit; }
 }
 .db-checkbox:checked::after {
     content: '';
-    width: 6px;
-    height: 10px;
+    width: 7px;
+    height: 12px;
     border: solid #0a0a0a;
-    border-width: 0 2px 2px 0;
+    border-width: 0 2.5px 2.5px 0;
     transform: rotate(45deg);
     margin-top: -2px;
 }
 .db-checkbox-label {
-    font-size: 0.85rem;
-    color: var(--lgrey);
+    font-size: 0.9rem;
+    color: #ccc;
 }
 .db-review-note {
     font-size: 0.85rem;
-    color: var(--lgrey);
+    color: #aaa;
     text-align: center;
     margin-top: 1rem;
     line-height: 1.6;
@@ -1146,7 +1146,7 @@ a { text-decoration: none; color: inherit; }
     border-bottom: 1px solid var(--stroke);
     font-weight: 600;
     font-size: 0.82rem;
-    color: var(--lgrey);
+    color: #aaa;
     flex-shrink: 0;
 }
 
@@ -1222,7 +1222,7 @@ a { text-decoration: none; color: inherit; }
 .db-editor-chat {
     display: flex;
     flex-direction: column;
-    background: var(--card);
+    background: #fff;
     height: 100%;
     overflow: hidden;
 }
@@ -1232,19 +1232,19 @@ a { text-decoration: none; color: inherit; }
     justify-content: space-between;
     align-items: center;
     padding: 0.65rem 1rem;
-    border-bottom: 1px solid var(--stroke);
+    border-bottom: 1px solid #e0e0e0;
     flex-shrink: 0;
 }
 .db-chat-header-title {
     font-weight: 600;
     font-size: 0.82rem;
-    color: var(--lgrey);
+    color: #333;
 }
 .db-chat-close-btn {
     display: none;
     background: none;
     border: none;
-    color: var(--lgrey);
+    color: #555;
     font-size: 1.3rem;
     cursor: pointer;
     padding: 0 4px;
@@ -1269,8 +1269,8 @@ a { text-decoration: none; color: inherit; }
 }
 .db-chat-msg-assistant {
     align-self: flex-start;
-    background: var(--card2);
-    color: var(--lgrey);
+    background: #f0f0f0;
+    color: #333;
     border-bottom-left-radius: 4px;
 }
 .db-chat-msg-user {
@@ -1286,9 +1286,45 @@ a { text-decoration: none; color: inherit; }
     flex-direction: column;
     gap: 0.35rem;
     padding: 0.65rem 1rem;
-    border-top: 1px solid var(--stroke);
+    border-top: 1px solid #e0e0e0;
     flex-shrink: 0;
 }
+.db-chat-image-preview {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #f0f0f0;
+    border: 1px solid #d0d0d0;
+    border-radius: 8px;
+    padding: 0.4rem 0.6rem;
+    margin-bottom: 0.25rem;
+}
+.db-chat-image-preview img {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+.db-chat-image-name {
+    font-size: 0.8rem;
+    color: #555;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.db-chat-image-remove {
+    background: none;
+    border: none;
+    color: #999;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0 0.25rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.db-chat-image-remove:hover { color: var(--red); }
 .db-chat-input-row {
     display: flex;
     gap: 0.4rem;
@@ -1296,25 +1332,26 @@ a { text-decoration: none; color: inherit; }
 }
 .db-chat-input {
     flex: 1;
-    background: var(--bg);
-    border: 1px solid var(--stroke);
+    background: #f5f5f5;
+    border: 1px solid #d0d0d0;
     border-radius: 8px;
     padding: 0.5rem 0.7rem;
-    color: var(--white);
+    color: #333;
     font-size: 0.88rem;
     resize: none;
     font-family: inherit;
     line-height: 1.4;
 }
+.db-chat-input::placeholder { color: #999; }
 .db-chat-input:focus {
     outline: none;
     border-color: var(--green);
 }
 .db-chat-upload-btn {
     background: none;
-    border: 1px solid var(--stroke);
+    border: 1px solid #d0d0d0;
     border-radius: 8px;
-    color: var(--lgrey);
+    color: #555;
     font-size: 1.1rem;
     cursor: pointer;
     padding: 0.45rem 0.55rem;
@@ -1332,17 +1369,19 @@ a { text-decoration: none; color: inherit; }
     align-items: center;
 }
 .db-chat-undo {
-    background: none;
-    border: 1px solid var(--stroke);
+    background: #f0f0f0;
+    border: 1px solid #d0d0d0;
     border-radius: 6px;
-    color: var(--lgrey);
-    font-size: 0.78rem;
+    color: #333;
+    font-size: 1.3rem;
     cursor: pointer;
-    padding: 0.3rem 0.6rem;
-    transition: opacity 0.15s, border-color 0.15s, color 0.15s;
+    padding: 6px 10px;
+    min-width: 36px;
+    line-height: 1;
+    transition: opacity 0.15s, border-color 0.15s, color 0.15s, background 0.15s;
 }
-.db-chat-undo:hover:not(:disabled) { color: var(--green); border-color: var(--green); }
-.db-chat-undo:disabled { opacity: 0.3; cursor: not-allowed; }
+.db-chat-undo:hover:not(:disabled) { color: var(--green); border-color: var(--green); background: #e8e8e8; }
+.db-chat-undo:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .db-chat-send {
     background: var(--green);
@@ -1365,7 +1404,7 @@ a { text-decoration: none; color: inherit; }
     gap: 5px;
     padding: 0.6rem 0.85rem;
     align-self: flex-start;
-    background: var(--card2);
+    background: #f0f0f0;
     border-radius: 12px;
     border-bottom-left-radius: 4px;
 }
@@ -1373,7 +1412,7 @@ a { text-decoration: none; color: inherit; }
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--lgrey);
+    background: #aaa;
     animation: chatTypingDot 1.4s infinite;
 }
 .db-chat-typing span:nth-child(2) { animation-delay: 0.2s; }
@@ -1426,9 +1465,9 @@ a { text-decoration: none; color: inherit; }
         z-index: 100;
         transform: translateY(100%);
         transition: transform 0.3s var(--ease);
-        border-top: 1px solid var(--stroke);
+        border-top: 1px solid #e0e0e0;
         border-radius: 16px 16px 0 0;
-        box-shadow: 0 -8px 32px rgba(0,0,0,0.5);
+        box-shadow: 0 -8px 32px rgba(0,0,0,0.2);
     }
     .db-editor-chat.open {
         transform: translateY(0);
@@ -1487,4 +1526,48 @@ a { text-decoration: none; color: inherit; }
     .db-review-price-num { font-size: clamp(2.5rem, 12vw, 4rem); }
 
     .db-editor-container { height: calc(100vh - 160px); }
+}
+
+/* ============================================
+   ACCESS CODE BOX (Step 6)
+   ============================================ */
+.db-access-code-box {
+    background: var(--card);
+    border: 1px solid var(--stroke);
+    border-radius: 12px;
+    padding: 1rem;
+}
+.db-access-code-label {
+    font-size: 0.75rem;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.25rem;
+    font-weight: 700;
+}
+.db-access-code-value {
+    font-family: monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: 0.1em;
+    margin-bottom: 0.25rem;
+}
+.db-access-code-hint {
+    font-size: 0.78rem;
+    color: #aaa;
+    margin-top: 0.5rem;
+    line-height: 1.5;
+}
+.db-review-plan-note {
+    font-size: 0.83rem;
+    color: #aaa;
+    text-align: center;
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+@media (max-width: 600px) {
+    .db-review-top-bar { flex-direction: column; }
+    .db-review-top-bar > div { min-width: 0 !important; width: 100%; }
 }

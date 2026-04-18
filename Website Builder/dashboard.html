@@ -184,7 +184,7 @@
                     </div>
                 </div>
                 <div class="db-editor-iframe-wrap" id="editorIframeWrap">
-                    <iframe class="db-editor-iframe" id="editorIframe" src="about:blank"></iframe>
+                    <iframe class="db-editor-iframe" id="editorIframe" src="about:blank" sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
                 </div>
                 <!-- Loading overlay with progress bar (shown while website loads in step 4) -->
                 <div class="db-editor-loading" id="editorLoading">
@@ -213,7 +213,10 @@
                         <textarea class="db-chat-input" id="chatInput" placeholder="z.B. &Auml;ndere die &Uuml;berschrift zu&hellip;" rows="2"></textarea>
                     </div>
                     <div class="db-chat-action-row">
-                        <button class="db-chat-undo" id="chatUndoBtn" onclick="dbUndo()" disabled title="Letzte &Auml;nderung r&uuml;ckg&auml;ngig machen">&#8630; R&uuml;ckg&auml;ngig</button>
+                        <div style="display:flex;gap:0.35rem;">
+                            <button class="db-chat-undo" id="chatUndoBtn" onclick="dbUndo()" disabled title="Letzte &Auml;nderung r&uuml;ckg&auml;ngig machen">&#8630;</button>
+                            <button class="db-chat-undo" id="chatRedoBtn" onclick="dbRedo()" disabled title="R&uuml;ckg&auml;ngig gemachte &Auml;nderung wiederherstellen">&#8631;</button>
+                        </div>
                         <button class="db-chat-send" id="chatSendBtn" onclick="dbChatSend()">Senden</button>
                     </div>
                 </div>
@@ -246,10 +249,17 @@
             <h1 class="db-heading">Fast geschafft!</h1>
             <p class="db-subtext">Schau dir deine fertige Website an und best&auml;tige deine Bestellung.</p>
 
-            <!-- Preview button opens overlay -->
-            <div class="db-review-section" style="text-align:center;">
-                <div class="db-review-title">Deine Website-Vorschau</div>
-                <button class="db-preview-link" id="reviewPreviewBtn" onclick="dbOpenPreview()">Website ansehen &rarr;</button>
+            <!-- Preview button + Access code side by side -->
+            <div class="db-review-section db-review-top-bar" style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap;">
+                <div style="flex:1;min-width:200px;text-align:center;">
+                    <div class="db-review-title">Deine Website-Vorschau</div>
+                    <button class="db-preview-link" id="reviewPreviewBtn" onclick="dbOpenPreview()">Website ansehen &rarr;</button>
+                </div>
+                <div class="db-access-code-box" style="flex:1;min-width:200px;text-align:center;">
+                    <div class="db-access-code-label">Dein Zugangscode</div>
+                    <div class="db-access-code-value" id="reviewLeadId">&mdash;</div>
+                    <p class="db-access-code-hint">Du kannst jederzeit zur&uuml;ckkommen &ndash; kein Fortschritt geht verloren. Melde dich mit diesem Code an. Den Code findest du auch in deiner E-Mail.</p>
+                </div>
             </div>
 
             <div class="db-review-section" style="text-align:left;">
@@ -268,6 +278,7 @@
                 </div>
             </div>
 
+            <p class="db-review-plan-note">Das Abonnement w&auml;hlst du nach dem Klick auf &laquo;Website jetzt bestellen&raquo;.</p>
             <p class="db-review-note" style="margin-bottom:1.5rem;">Deine Website wird innerhalb von <strong>48 Stunden</strong> live geschaltet.</p>
 
             <label class="db-checkbox-wrap" style="justify-content:center;">
@@ -323,7 +334,7 @@
     <iframe class="db-preview-overlay-iframe" id="previewOverlayIframe" src="about:blank"></iframe>
 </div>
 
-<script src="dashboard.js?v=20260410"></script>
+<script src="dashboard.js?v=20260413c"></script>
 
 <!-- Modal system (shared with landing page) -->
 <script>

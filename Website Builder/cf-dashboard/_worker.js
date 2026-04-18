@@ -94,10 +94,10 @@ async function updateCells(accessToken, sheetId, rowIdx, updates) {
       ? String.fromCharCode(65 + colIdx)
       : String.fromCharCode(64 + Math.floor(colIdx / 26)) + String.fromCharCode(65 + (colIdx % 26));
     requests.push(
-      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(`Sheet1!${colLetter}${rowIdx}`)}?valueInputOption=USER_ENTERED`, {
+      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(`Sheet1!${colLetter}${rowIdx}`)}?valueInputOption=RAW`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ values: [[String(value)]] }),
+        body: JSON.stringify({ values: [[sanitizeSheetValue(value)]] }),
       })
     );
   }
@@ -383,6 +383,14 @@ Generiere ein JSON-Objekt mit diesen Feldern:
   "VALUE_2_DESCRIPTION": "kurze Beschreibung basierend auf Kundentext, oder leer",
   "VALUE_3_TITLE": "Wert aus Kundeninfo, 1-2 Wörter, oder leer",
   "VALUE_3_DESCRIPTION": "kurze Beschreibung basierend auf Kundentext, oder leer",
+  "STAT_1_NUMBER": "Zahl/Wert aus Kundentext (z.B. '30+' wenn Kunde 30 Jahre Erfahrung nennt), oder beschreibendes Wort wie 'Top', '100%'. NUR Zahlen verwenden die der Kunde explizit genannt hat.",
+  "STAT_1_LABEL": "Label zur Statistik, 1-3 Wörter (z.B. 'Jahre Erfahrung')",
+  "STAT_2_NUMBER": "Zweite Zahl/Wert aus Kundentext, oder beschreibendes Wort. Keine erfundenen Zahlen.",
+  "STAT_2_LABEL": "Label zur zweiten Statistik, 1-3 Wörter",
+  "STAT_3_NUMBER": "Dritte Zahl/Wert aus Kundentext, oder beschreibendes Wort. Keine erfundenen Zahlen.",
+  "STAT_3_LABEL": "Label zur dritten Statistik, 1-3 Wörter",
+  "STAT_4_NUMBER": "Vierte Zahl/Wert, oder leer wenn nicht genug Info",
+  "STAT_4_LABEL": "Label oder leer",
   "STATEMENT_LINE1": "Statement Zeile 1, 2-4 Wörter",
   "STATEMENT_LINE2": "Statement Zeile 2, 2-4 Wörter",
   "STATEMENT_LINE3": "Statement Zeile 3, 2-4 Wörter",
@@ -499,6 +507,8 @@ function leadToPlaceholderData(lead, customizations) {
   if (lead.phone) { data.PHONE = lead.phone; data.PHONE_SHORT = lead.phone; }
   const email = lead.owner_email || lead.emails || "";
   if (email) data.EMAIL = email;
+  // Fallback: use email from customizations (passed from frontend) if sheet doesn't have one
+  if (!data.EMAIL && cust.email) data.EMAIL = cust.email;
   if (lead.address || lead.city) data.ADDRESS = lead.address || lead.city;
   if (lead.category) data.category = lead.category;
   if (lead.city) data.city = lead.city;
@@ -646,6 +656,15 @@ function buildFallbackReplacements(lead, cust) {
   };
 }
 
+// ── Sheet value sanitizer (formula injection defence) ──────
+// Prepends a single quote to any value that starts with a formula-trigger char.
+// Applied to all user-supplied fields before writing to Sheets.
+function sanitizeSheetValue(value) {
+  if (typeof value !== "string") return String(value ?? "");
+  // Google Sheets treats leading =, +, -, @, tab, or CR as formula triggers
+  return /^[=+\-@\t\r]/.test(value) ? "'" + value : value;
+}
+
 // ── Helpers ───────────────────────────────────────────────
 function jsonResp(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -706,7 +725,7 @@ async function handleGetLead(leadId, env, ctx) {
 // ── Append a new row to the sheet ────────────────────────
 async function appendRow(accessToken, sheetId, values) {
   const resp = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent("Sheet1!A:A")}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
@@ -732,12 +751,9 @@ async function handleRegister(request, env) {
   // Always create a new lead — no dedup. No-code users start fresh every session.
   // To return to an existing site, users must use their access code (lead_id).
 
-  // Generate a 12-char hex lead_id from email + timestamp
-  const encoder = new TextEncoder();
-  const data = encoder.encode(email + Date.now().toString());
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const leadId = hashArray.map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 12);
+  // Generate a cryptographically random 12-char hex lead_id.
+  // Using randomUUID() gives 122 bits of entropy — not derivable from email + timestamp.
+  const leadId = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
 
   // Build row explicitly — only set known fields, everything else stays empty
   const now = new Date().toISOString();
@@ -829,6 +845,7 @@ async function handleOrder(leadId, request, env) {
   const services = fd.get("services")||"", strengths = fd.get("strengths")||"";
   const selectedDomain = fd.get("selected_domain")||"";
   const phone = fd.get("phone")||"", address = fd.get("address")||"";
+  const email = fd.get("email") || lead.owner_email || lead.emails || "";
   if (fd.get("agreed_to_terms") !== "true") return jsonResp({ error: "AGB müssen akzeptiert werden." }, 400);
   if (!chosenTemplate) return jsonResp({ error: "Kein Template gewählt." }, 400);
 
@@ -857,7 +874,7 @@ async function handleOrder(leadId, request, env) {
     console.log("Using cached preview HTML for", leadId);
   } else {
     try {
-      const result = await generateFinalHTML(env, request.url, chosenTemplate, leadId, description, services, strengths, logo, images, phone, address);
+      const result = await generateFinalHTML(env, request.url, chosenTemplate, leadId, description, services, strengths, logo, images, phone, address, email);
       finalHtml = result.html;
     } catch (e) { console.error("HTML generation error:", e); }
   }
@@ -868,6 +885,8 @@ async function handleOrder(leadId, request, env) {
       projectName = generateProjectName(lead.business_name || "", leadId);
       liveUrl = await deployToCloudflarePages(env, projectName, finalHtml);
       console.log("Deployed to:", liveUrl);
+      // Clean up KV drafts now that final site is deployed
+      try { await deleteDraftsFromKV(env, leadId); } catch (e) { console.error("KV cleanup error:", e); }
     } catch (e) { console.error("Deploy error:", e); }
   } else if (!finalHtml) {
     console.error("Skipping deploy: HTML generation failed");
@@ -991,7 +1010,7 @@ function arrayBufferToBase64(buffer) {
 
 // ── Generate Final HTML (shared between preview + order) ──
 // Uses new generation pipeline: template defaults + Pexels images + placeholder fill
-async function generateFinalHTML(env, requestUrl, templateKey, leadId, description, services, strengths, logoFile, imageFiles, phone, address) {
+async function generateFinalHTML(env, requestUrl, templateKey, leadId, description, services, strengths, logoFile, imageFiles, phone, address, email) {
   if (!TEMPLATE_KEYS.includes(templateKey)) throw new Error("Template not found: " + templateKey);
 
   // 1. Get template HTML (use raw templates with {{PLACEHOLDER}} patterns)
@@ -1011,7 +1030,7 @@ async function generateFinalHTML(env, requestUrl, templateKey, leadId, descripti
   } catch (e) { console.error("Lead lookup error:", e); }
 
   // 3. Build placeholder data from lead + anpassen customizations
-  const cust = { description, services, strengths, phone: phone || "", address: address || "" };
+  const cust = { description, services, strengths, phone: phone || "", address: address || "", email: email || "" };
   const placeholderData = leadToPlaceholderData(lead || { business_name: "" }, cust);
 
   // 4. Process uploaded images — convert to data URLs for override
@@ -1073,6 +1092,11 @@ async function generateFinalHTML(env, requestUrl, templateKey, leadId, descripti
 }
 
 async function handlePreviewWithImages(request, env) {
+  // Rate limiting: 10 full previews per IP per hour (each triggers AI + Pexels)
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  if (!await checkRateLimit(env, `preview-ip:${ip}`, 10, 3600))
+    return new Response("Too many requests", { status: 429, headers: { "Access-Control-Allow-Origin": "*" } });
+
   try {
     const fd = await request.formData();
     const leadId = fd.get("lead_id") || "";
@@ -1082,9 +1106,10 @@ async function handlePreviewWithImages(request, env) {
     const strengths = fd.get("strengths") || "";
     const phone = fd.get("phone") || "";
     const address = fd.get("address") || "";
+    const email = fd.get("email") || "";
     const result = await generateFinalHTML(
       env, request.url, templateKey, leadId, description, services, strengths,
-      fd.get("logo"), fd.getAll("images"), phone, address
+      fd.get("logo"), fd.getAll("images"), phone, address, email
     );
     const html = result.html;
     const aiCategory = result.aiCategory;
@@ -1128,6 +1153,23 @@ function generateProjectName(businessName, leadId) {
 }
 
 // ── Cloudflare Pages Deploy (REST API) ───────────────────
+// ── Save draft HTML to KV (for previews, no project needed) ──
+async function saveDraftToKV(env, leadId, templateKey, htmlContent) {
+  if (!env.DRAFTS_KV) throw new Error("DRAFTS_KV not bound");
+  const key = `${leadId}/${templateKey}`;
+  await env.DRAFTS_KV.put(key, htmlContent);
+  // Return a URL that our worker can serve (use pages.dev — meine-kmu.ch DNS not yet linked)
+  return `https://meinekmu.pages.dev/draft/${leadId}/${templateKey}`;
+}
+
+// ── Delete all drafts for a lead from KV ──
+async function deleteDraftsFromKV(env, leadId) {
+  if (!env.DRAFTS_KV) return;
+  for (const tpl of TEMPLATE_KEYS) {
+    try { await env.DRAFTS_KV.delete(`${leadId}/${tpl}`); } catch (e) { /* ignore */ }
+  }
+}
+
 async function deployToCloudflarePages(env, projectName, htmlContent) {
   const accountId = env.CF_ACCOUNT_ID;
   const apiToken = env.CF_API_TOKEN;
@@ -1135,13 +1177,18 @@ async function deployToCloudflarePages(env, projectName, htmlContent) {
 
   const headers = { Authorization: `Bearer ${apiToken}` };
 
-  // 1. Create project (ignore error if exists)
+  // 1. Create project (ignore "already exists" errors)
   try {
-    await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects`, {
+    const projResp = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects`, {
       method: "POST", headers: { ...headers, "Content-Type": "application/json" },
       body: JSON.stringify({ name: projectName, production_branch: "main" }),
     });
-  } catch (e) { console.log("Project create (may already exist):", e.message); }
+    const projData = await projResp.json();
+    if (!projData.success && projData.errors?.[0]?.code !== 8000009) {
+      // 8000009 = "A project with this name already exists" — that's expected
+      console.warn("Project create issue:", JSON.stringify(projData.errors));
+    }
+  } catch (e) { console.warn("Project create error:", e.message); }
 
   // 2. Direct Upload deployment
   // Step a: create upload session
@@ -1187,35 +1234,33 @@ function emailFooter() {
   </div>`;
 }
 
-// ── Domain availability check via RDAP / DNS ─────────────
+// ── Domain availability check via RDAP ─────────────
 async function checkDomainAvailability(domain) {
-  const tld = domain.rsplit ? domain.split(".").pop() : domain.split(".").pop();
+  const tld = domain.split(".").pop();
+
+  // Dedicated RDAP endpoints for common TLDs
   if (tld === "ch") {
-    // .ch domains: use RDAP (nic.ch)
     try {
       const resp = await fetch(`https://rdap.nic.ch/domain/${domain}`, { redirect: "follow" });
       if (resp.status === 404) return { domain, available: true, tld: "." + tld };
       if (resp.status === 200) return { domain, available: false, tld: "." + tld };
-    } catch (e) { /* fall through to DNS */ }
-  } else if (tld === "com") {
-    // .com domains: use RDAP (verisign)
+    } catch (e) { /* fall through */ }
+  } else if (tld === "com" || tld === "net") {
     try {
-      const resp = await fetch(`https://rdap.verisign.com/com/v1/domain/${domain}`, { redirect: "follow" });
+      const resp = await fetch(`https://rdap.verisign.com/${tld}/v1/domain/${domain}`, { redirect: "follow" });
       if (resp.status === 404) return { domain, available: true, tld: "." + tld };
       if (resp.status === 200) return { domain, available: false, tld: "." + tld };
-    } catch (e) { /* fall through to DNS */ }
+    } catch (e) { /* fall through */ }
   }
-  // Fallback: DNS resolution check via Cloudflare DoH
+
+  // Universal RDAP fallback — works for any TLD, far more reliable than DNS
   try {
-    const resp = await fetch(`https://cloudflare-dns.com/dns-query?name=${domain}&type=A`, {
-      headers: { "Accept": "application/dns-json" },
-    });
-    const data = await resp.json();
-    const hasRecords = data.Answer && data.Answer.length > 0;
-    return { domain, available: !hasRecords, tld: "." + tld };
-  } catch (e) {
-    return { domain, available: null, tld: "." + tld }; // unknown
-  }
+    const resp = await fetch(`https://rdap.org/domain/${domain}`, { redirect: "follow" });
+    if (resp.status === 404) return { domain, available: true, tld: "." + tld };
+    if (resp.status === 200) return { domain, available: false, tld: "." + tld };
+  } catch (e) { /* fall through */ }
+
+  return { domain, available: null, tld: "." + tld };
 }
 
 async function handleCheckDomains(request) {
@@ -1232,8 +1277,8 @@ async function handleCheckDomains(request) {
 
 function domainPurchaseLink(domain, existingLink) {
   if (existingLink && existingLink.startsWith("http")) return existingLink;
-  const encoded = (domain || "").replace(/\./g, "%2E");
-  return `https://www.namecheap.com/domains/registration/results/?domain=${encoded}`;
+  const encoded = encodeURIComponent(domain || "");
+  return `https://www.infomaniak.com/de/domains?domain=${encoded}`;
 }
 
 function cloudflareDomainLink(projectName) {
@@ -1257,9 +1302,11 @@ async function sendEmail(env, to, subject, html) {
   } catch (e) { console.error("Email send failed:", e); }
 }
 
-// ── Shared: Build 2x2 Website Screenshot Grid ───────────
+// ── Shared: Build 2x2 Website Preview Grid (styled HTML cards, no external screenshot service) ───
 function buildWebsiteGrid(lead) {
   const templateLabels = { earlydog: "Klassisch", bia: "Modern", liveblocks: "Frisch", loveseen: "Elegant" };
+  const templateColors = { earlydog: "#e8f0e8", bia: "#f0e8e0", liveblocks: "#e0e8f0", loveseen: "#f0e0ec" };
+  const templateAccents = { earlydog: "#2d5a3d", bia: "#8b6914", liveblocks: "#1a3a5c", loveseen: "#6b3a5c" };
   const orderedKeys = ["earlydog", "bia", "liveblocks", "loveseen"];
   let gridCells = "";
   let linkCount = 0;
@@ -1267,13 +1314,7 @@ function buildWebsiteGrid(lead) {
     const url = lead[`url_${key}`] || "";
     if (url) {
       linkCount++;
-      const thumbUrl = `https://image.thum.io/get/width/560/crop/400/${url}`;
-      gridCells += `<td width="50%" style="padding:5px;">
-        <a href="${url}" target="_blank" style="display:block;text-decoration:none;color:#444;">
-          <img src="${thumbUrl}" width="100%" style="border:1px solid #ddd;border-radius:5px;display:block;" alt="${templateLabels[key] || key}">
-          <div style="text-align:center;font-size:12px;margin-top:6px;font-weight:600;">${templateLabels[key] || key} →</div>
-        </a>
-      </td>`;
+      gridCells += emailPreviewCard(url, templateLabels[key] || key, templateColors[key] || "#f0f0f0", templateAccents[key] || "#333");
     }
   }
   if (linkCount === 0) return { gridHtml: "", linkCount: 0 };
@@ -1284,6 +1325,23 @@ function buildWebsiteGrid(lead) {
   }
   gridHtml += '</table>';
   return { gridHtml, linkCount };
+}
+
+function emailPreviewCard(url, label, bgColor, accentColor) {
+  return `<td width="50%" style="padding:5px;">
+    <a href="${url}" target="_blank" style="display:block;text-decoration:none;color:#444;">
+      <div style="background:${bgColor};border:1px solid #ddd;border-radius:8px;overflow:hidden;">
+        <div style="padding:32px 16px;text-align:center;">
+          <div style="width:40px;height:4px;background:${accentColor};margin:0 auto 12px;border-radius:2px;"></div>
+          <div style="font-size:11px;color:${accentColor};letter-spacing:1.5px;text-transform:uppercase;font-weight:600;">${label}</div>
+          <div style="width:60%;height:2px;background:${accentColor};opacity:0.2;margin:10px auto 0;border-radius:1px;"></div>
+        </div>
+        <div style="background:${accentColor};padding:10px 16px;text-align:center;">
+          <span style="color:#fff;font-size:12px;font-weight:600;">Vorschau ansehen →</span>
+        </div>
+      </div>
+    </a>
+  </td>`;
 }
 
 // ── Shared: Standard email shell (light theme, matches cold outreach) ──
@@ -1635,11 +1693,14 @@ async function handleStripeWebhook(request, env) {
   const body = await request.text();
   const sig = request.headers.get("stripe-signature");
 
-  // Verify webhook signature
-  if (env.STRIPE_WEBHOOK_SECRET && sig) {
-    const verified = await verifyStripeSignature(body, sig, env.STRIPE_WEBHOOK_SECRET);
-    if (!verified) return jsonResp({ error: "Invalid signature" }, 400);
+  // Verify webhook signature — mandatory, no fallback
+  if (!env.STRIPE_WEBHOOK_SECRET) {
+    console.error("STRIPE_WEBHOOK_SECRET not configured — rejecting webhook");
+    return jsonResp({ error: "Webhook not configured" }, 500);
   }
+  if (!sig) return jsonResp({ error: "Missing stripe-signature header" }, 400);
+  const verified = await verifyStripeSignature(body, sig, env.STRIPE_WEBHOOK_SECRET);
+  if (!verified) return jsonResp({ error: "Invalid signature" }, 400);
 
   const event = JSON.parse(body);
   console.log("Stripe webhook:", event.type);
@@ -1732,7 +1793,16 @@ async function verifyStripeSignature(payload, sigHeader, secret) {
 }
 
 async function sendInternalNotification(env, leadId, businessName, leadEmail, liveUrl, selectedDomain, purchaseLink, cfDomainLink) {
-  const confirmUrl = `https://meinekmu.pages.dev/api/lead/${leadId}/confirm-live?secret=${env.CRON_SECRET || ""}`;
+  // Generate a one-time token for the confirm-live action.
+  // This keeps the CRON_SECRET out of email bodies, browser history, and server logs.
+  let confirmUrl = `https://meinekmu.pages.dev/api/lead/${leadId}/confirm-live?secret=${env.CRON_SECRET || ""}`;
+  if (env.DRAFTS_KV) {
+    try {
+      const token = crypto.randomUUID().replace(/-/g, "");
+      await env.DRAFTS_KV.put(`confirm_token:${token}`, leadId, { expirationTtl: 14 * 24 * 3600 });
+      confirmUrl = `https://meinekmu.pages.dev/api/confirm-live?token=${token}`;
+    } catch (e) { console.error("Token generation failed, falling back to secret URL:", e); }
+  }
   const subject = `Neue Bestellung — ${businessName} (${leadId})`;
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:580px;margin:0 auto;padding:0;color:#333;line-height:1.6;">
@@ -1762,7 +1832,7 @@ ${emailHeader()}
 
     <div style="margin-bottom:12px;">
       <a href="${purchaseLink}" style="display:block;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:6px;padding:14px 16px;text-decoration:none;color:#333;">
-        <div style="font-size:11px;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Domain kaufen (Namecheap)</div>
+        <div style="font-size:11px;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Domain kaufen (Infomaniak)</div>
         <div style="font-weight:600;">${selectedDomain || "Domain suchen"} →</div>
       </a>
     </div>
@@ -1840,6 +1910,13 @@ function generateTemplateProjectName(businessName, leadId, templateKey) {
 async function handleGenerateAll(leadId, request, env, ctx) {
   if (!leadId) return jsonResp({ error: "Invalid lead ID" }, 400);
 
+  // Rate limiting: max 3 generations per lead per hour (this is expensive — AI + Pexels × 4)
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  if (!await checkRateLimit(env, `gen-lead:${leadId}`, 3, 3600))
+    return jsonResp({ error: "Generierungslimit erreicht. Versuche es in einer Stunde erneut." }, 429);
+  if (!await checkRateLimit(env, `gen-ip:${ip}`, 10, 3600))
+    return jsonResp({ error: "Zu viele Anfragen von dieser IP." }, 429);
+
   // Accept form data from request body (avoids race condition with save-form)
   let bodyData = {};
   try { bodyData = await request.json(); } catch { /* empty body is fine */ }
@@ -1871,6 +1948,8 @@ async function handleGenerateAll(leadId, request, env, ctx) {
     const email = lead.owner_email || lead.emails || "";
 
     // ── SHARED STEP 1: Build lead placeholder data ONCE ──
+    // Override lead.business_name with freshest data from body (save-form may not have completed yet)
+    if (businessName) lead.business_name = businessName;
     const cust = { description, services, strengths, phone, address };
     const placeholderData = leadToPlaceholderData(lead, cust);
 
@@ -1891,7 +1970,7 @@ async function handleGenerateAll(leadId, request, env, ctx) {
       }
     }
     let sharedImages = {};
-    const hasBusinessContext = !!(description || values || lead.category || businessName);
+    const hasBusinessContext = !!(description || strengths || lead.category || businessName);
     if (hasBusinessContext) {
       const mergedForImages = { ...placeholderData, category: aiCategory || lead.category || "" };
       sharedImages = await suggestBusinessImages(env, mergedForImages, allImageSlots);
@@ -1972,17 +2051,22 @@ async function handleGenerateAll(leadId, request, env, ctx) {
         html = html.replace(/src="\/(templates\/[^"]+)"/g, 'src="https://meinekmu.pages.dev/$1"');
         html = html.replace(/href="\/(templates\/[^"]+)"/g, 'href="https://meinekmu.pages.dev/$1"');
 
-        // Deploy
-        const projectName = generateTemplateProjectName(businessName, leadId, tplKey);
-        const deployUrl = await deployToCloudflarePages(env, projectName, html);
-        await updateTemplateResult(tplKey, deployUrl, "done");
-        return { tplKey, url: deployUrl };
+        // Save draft to KV (no CF Pages project needed)
+        const draftUrl = await saveDraftToKV(env, leadId, tplKey, html);
+        await updateTemplateResult(tplKey, draftUrl, "done");
+        return { tplKey, url: draftUrl };
       } catch (e) {
         console.error(`Generation failed for ${tplKey}:`, e);
         await updateTemplateResult(tplKey, null, "error");
         throw e;
       }
     }));
+
+    // ── STEP 4b: Update lead status to website_created if any drafts succeeded ──
+    if (Object.keys(genUrls).length > 0) {
+      try { await updateCells(accessToken, env.LEADS_SHEET_ID, rowIdx, { status: "website_created" }); }
+      catch (e) { console.error("Status update error:", e); }
+    }
 
     // ── STEP 5: Send welcome email with website previews ──
     if (email && !lead.welcome_email_sent) {
@@ -2017,6 +2101,34 @@ async function handleGenerationStatus(leadId, env) {
   return jsonResp({ status, urls });
 }
 
+// ── Rate Limiting (KV-backed, sliding window) ─────────────
+// Returns true if the request is within limits, false if it should be rejected.
+// key     — unique identifier (e.g. "chat:1.2.3.4" or "gen:abc123leadid")
+// limit   — max requests allowed in the window
+// windowS — window duration in seconds
+async function checkRateLimit(env, key, limit, windowS) {
+  if (!env.DRAFTS_KV) return true; // fail open if KV unavailable
+  const bucket = `rl:${key}:${Math.floor(Date.now() / 1000 / windowS)}`;
+  try {
+    const current = parseInt(await env.DRAFTS_KV.get(bucket) || "0");
+    if (current >= limit) return false;
+    // Increment and set TTL to 2× the window so stale keys expire automatically
+    await env.DRAFTS_KV.put(bucket, String(current + 1), { expirationTtl: windowS * 2 });
+    return true;
+  } catch (e) { console.error("Rate limit check failed:", e); return true; } // fail open
+}
+
+// ── Strip scripts from AI-returned HTML (defence-in-depth) ──
+function stripScriptsFromHtml(html) {
+  return html
+    // Remove <script>...</script> blocks entirely
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    // Remove inline event handlers (onclick=, onload=, onerror=, etc.)
+    .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    // Remove javascript: hrefs/srcs
+    .replace(/(?:href|src|action)\s*=\s*["']\s*javascript:[^"']*/gi, 'href="#"');
+}
+
 // ── AI Chat Edit ─────────────────────────────────────────
 async function handleChatEdit(leadId, request, env) {
   if (!leadId) return jsonResp({ error: "Invalid lead ID" }, 400);
@@ -2026,6 +2138,17 @@ async function handleChatEdit(leadId, request, env) {
   try { body = await request.json(); } catch { return jsonResp({ error: "Ungültige Anfrage." }, 400); }
   const { html, message, template_key, history, business_context } = body;
   if (!html || !message) return jsonResp({ error: "HTML und Nachricht sind erforderlich." }, 400);
+
+  // Input size limits — prevents prompt-stuffing and runaway API cost
+  if (html.length > 400000) return jsonResp({ error: "HTML zu gross." }, 400);
+  if (message.length > 2000) return jsonResp({ error: "Nachricht zu lang (max. 2000 Zeichen)." }, 400);
+
+  // Rate limiting: 20 requests/minute per IP, 60 per hour per lead
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  if (!await checkRateLimit(env, `chat-ip:${ip}`, 20, 60))
+    return jsonResp({ error: "Zu viele Anfragen. Bitte warte eine Minute." }, 429);
+  if (!await checkRateLimit(env, `chat-lead:${leadId}`, 60, 3600))
+    return jsonResp({ error: "Stundenlimit erreicht. Versuche es später erneut." }, 429);
 
   // Build business context for the system prompt
   const biz = business_context || {};
@@ -2052,11 +2175,22 @@ WICHTIG — Antworte IMMER als gültiges JSON-Objekt mit genau einem dieser Form
 {"type": "edit", "html": "<vollständiges geändertes HTML>", "message": "Kurze, natürliche Beschreibung der Änderung"}
 oder
 {"type": "chat", "message": "Deine Antwort an den Kunden"}
+oder
+{"type": "image_search", "html": "<vollständiges geändertes HTML mit [PEXELS_BILD] Platzhaltern>", "queries": ["Suchbegriff 1", "Suchbegriff 2"], "message": "Kurze Beschreibung"}
 
 BILDER — SEHR WICHTIG:
 - Im HTML gibt es Bildplatzhalter im Format src="[BILD_0]", src="[BILD_1]" usw. Diese sind echte eingebettete Bilder des Kunden. Du MUSST sie exakt beibehalten — lösche oder ersetze sie NIEMALS durch etwas anderes.
-- Wenn der Kunde sagt "tausche das Bild aus" oder "ändere das Bild": Antworte mit "type": "chat" und erkläre, dass er das Kamera-Symbol unten links verwenden soll um ein neues Bild hochzuladen — dann tauschst du es ein.
-- Wenn der Kunde dir eine Bild-URL (https://...) oder data:image/... gibt: verwende diese direkt im src-Attribut des betreffenden img-Tags.
+- Wenn der Kunde ein neues Bild hochgeladen hat, steht in der Nachricht "[NEUES_BILD]". Du kannst dieses Bild verwenden um:
+  a) Ein bestehendes Bild zu ersetzen: Setze src="[NEUES_BILD]" im entsprechenden img-Tag.
+  b) Ein neues Bild HINZUZUFÜGEN: Erstelle ein neues <img src="[NEUES_BILD]" alt="..."> Tag an der gewünschten Stelle. Verwende passende CSS-Styles die zum bestehenden Design passen.
+  Das System ersetzt den Platzhalter [NEUES_BILD] automatisch mit dem echten Bild. Antworte mit "type": "edit" und dem geänderten HTML.
+- BILDSUCHE — Wenn der Kunde nach anderen/neuen/besseren Bildern fragt (z.B. "suche ein Bild von...", "ersetze das Bild durch etwas mit...", "ich möchte ein Foto von...", "andere Bilder", "passendere Bilder"):
+  Verwende "type": "image_search". Setze src="[PEXELS_BILD_0]" für das erste Bild, src="[PEXELS_BILD_1]" für das zweite usw.
+  Im "queries"-Array gibst du für jeden Platzhalter einen englischen Suchbegriff an (Pexels versteht Englisch am besten).
+  Beispiel: Kunde sagt "ersetze das Hero-Bild mit einem Foto von einem Coiffeur-Salon":
+  {"type": "image_search", "html": "...src=\"[PEXELS_BILD_0]\"...", "queries": ["hair salon interior modern"], "message": "Ich suche ein passendes Bild für dich!"}
+  Das System sucht automatisch auf Pexels und fügt das Bild ein.
+- Wenn der Kunde dir eine Bild-URL (https://...) gibt: verwende diese direkt im src-Attribut — entweder in einem bestehenden oder einem neuen img-Tag. Antworte mit "type": "edit".
 
 Regeln:
 - Verwende "type": "edit" NUR wenn du tatsächlich das HTML änderst. Gib dann das VOLLSTÄNDIGE geänderte HTML im "html"-Feld zurück.
@@ -2067,12 +2201,20 @@ Regeln:
 - Verwende immer echte Umlaute (ä, ö, ü, Ä, Ö, Ü) — NIEMALS ae, oe, ue schreiben.
 - Variiere deine Antworten im "message"-Feld — sei natürlich und freundlich, nicht roboterhaft.
 
+NEUE ABSCHNITTE — WICHTIG:
+Wenn der Kunde einen neuen Abschnitt hinzufügen möchte:
+1. Analysiere zuerst die bestehende Website: Welche CSS-Klassen, Farben, Schriftarten, Abstände, Border-Radien und Layout-Muster werden verwendet?
+2. Der neue Abschnitt MUSS exakt den gleichen Stil verwenden — gleiche Schriftfamilien, Farbpalette, Abstände (padding/margin), Containerbreiten, und visuelle Elemente (Schatten, Rahmen, Rundungen).
+3. Verwende die gleichen CSS-Klassen wie bestehende Abschnitte. Wenn z.B. bestehende Sections die Klasse "section" mit bestimmten Padding-Werten verwenden, nutze dieselbe Klasse.
+4. Wenn du Inline-Styles brauchst, orientiere dich an den Werten der bestehenden Abschnitte.
+5. Der neue Abschnitt soll sich nahtlos in das bestehende Design einfügen — er darf NICHT wie ein Fremdkörper wirken.
+
 Was du KANNST:
 - Texte ändern (Überschriften, Absätze, Button-Texte)
 - Farben und einfache Styles anpassen
-- Bilder austauschen (NUR wenn der Kunde eine konkrete URL oder data:image liefert)
+- Bilder austauschen oder neue Bilder hinzufügen (via Kunde-Upload [NEUES_BILD], Bild-URL, oder Pexels-Suche [PEXELS_BILD_x])
 - Abschnitte umordnen oder entfernen
-- Neue Textabschnitte hinzufügen
+- Neue Abschnitte hinzufügen (IMMER im gleichen Stil wie die bestehende Website!)
 - Schriftarten anpassen
 
 Was du NICHT kannst (antworte mit "type": "chat" und verweise auf info@meine-kmu.ch):
@@ -2122,6 +2264,11 @@ Bei Anfragen die du nicht umsetzen kannst, antworte freundlich und verweise auf 
     }
 
     const data = await resp.json();
+    // Detect truncated output — AI hit max_tokens before finishing
+    if (data.stop_reason === "max_tokens") {
+      console.warn("Chat edit truncated (max_tokens reached)");
+      return jsonResp({ type: "chat", message: "Die Änderung war zu komplex. Bitte mach kleinere Änderungen (z.B. nur eine Überschrift oder ein Bild auf einmal)." });
+    }
     let editedText = data.content?.[0]?.text || "";
 
     // Strip any accidental markdown code fences
@@ -2132,24 +2279,56 @@ Bei Anfragen die du nicht umsetzen kannst, antworte freundlich und verweise auf 
     try {
       result = JSON.parse(editedText);
     } catch {
-      // Fallback: if AI returned raw HTML (starts with < or <!DOCTYPE)
-      if (editedText.trimStart().startsWith("<")) {
-        result = { type: "edit", html: editedText, message: "Änderung umgesetzt!" };
-      } else {
-        // AI returned plain text — treat as chat response
-        result = { type: "chat", message: editedText };
+      // Try extracting JSON object from within the text (AI sometimes adds preamble)
+      const jsonMatch = editedText.match(/\{[\s\S]*"type"\s*:\s*"(?:edit|chat|image_search)"[\s\S]*\}/);
+      if (jsonMatch) {
+        try { result = JSON.parse(jsonMatch[0]); } catch { result = null; }
       }
+      if (!result) {
+        // Fallback: if AI returned raw HTML (starts with < or <!DOCTYPE)
+        if (editedText.trimStart().startsWith("<")) {
+          result = { type: "edit", html: editedText, message: "Änderung umgesetzt!" };
+        } else {
+          // AI returned plain text — treat as chat response
+          result = { type: "chat", message: editedText };
+        }
+      }
+    }
+
+    // Handle image_search: search Pexels, replace [PEXELS_BILD_x] placeholders, return as normal edit
+    if (result.type === "image_search" && result.html && Array.isArray(result.queries)) {
+      const queries = result.queries.slice(0, 5); // max 5 searches
+      const pexelsUrls = await Promise.all(queries.map(q => searchPexels(env, q)));
+      let filledHtml = result.html;
+      for (let i = 0; i < queries.length; i++) {
+        const imageUrl = (pexelsUrls[i] && pexelsUrls[i][0]) || "";
+        const placeholder = `[PEXELS_BILD_${i}]`;
+        filledHtml = filledHtml.replaceAll(placeholder, imageUrl);
+      }
+      // Clean up any remaining unfilled placeholders
+      filledHtml = filledHtml.replace(/\[PEXELS_BILD_\d+\]/g, "");
+      result = { type: "edit", html: filledHtml, message: result.message || "Neue Bilder gefunden und eingesetzt!" };
     }
 
     // Validate: if type is "edit", the html field must look like actual HTML
     if (result.type === "edit") {
       const htmlContent = (result.html || "").trim();
       if (!htmlContent.startsWith("<") || htmlContent.length < 50) {
-        result = { type: "chat", message: result.message || result.html || "Etwas ist schiefgegangen." };
+        result = { type: "chat", message: result.message || "Etwas ist schiefgegangen." };
+      } else {
+        // Ensure a friendly message is always present for edit responses
+        if (!result.message) result.message = "Änderung umgesetzt!";
       }
     }
 
-    return jsonResp(result);
+    // Never return the html field in chat-only responses (saves bandwidth)
+    if (result.type === "chat") {
+      return jsonResp({ type: "chat", message: result.message || "Ich kann dir dabei leider nicht helfen." });
+    }
+
+    // Strip any scripts the AI may have introduced (defence-in-depth against prompt injection)
+    const safeHtml = stripScriptsFromHtml(result.html);
+    return jsonResp({ type: "edit", html: safeHtml, message: result.message });
   } catch (e) {
     console.error("Chat edit error:", e);
     return jsonResp({ error: "Änderung fehlgeschlagen: " + e.message }, 500);
@@ -2206,14 +2385,12 @@ async function handleSaveHtml(leadId, request, env) {
     if (fileId) updates[`html_${template_key}_drive_id`] = fileId;
   } catch (e) { console.error("Drive save error:", e); }
 
-  // 2. Redeploy to Cloudflare Pages
+  // 2. Save updated draft to KV
   let liveUrl = "";
   try {
-    const businessName = lead.form_business_name || lead.business_name || "";
-    const projectName = generateTemplateProjectName(businessName, leadId, template_key);
-    liveUrl = await deployToCloudflarePages(env, projectName, html);
+    liveUrl = await saveDraftToKV(env, leadId, template_key, html);
     updates[`url_${template_key}`] = liveUrl;
-  } catch (e) { console.error("Redeploy error:", e); }
+  } catch (e) { console.error("KV save error:", e); }
 
   // 3. Update sheet
   if (Object.keys(updates).length > 0) {
@@ -2284,8 +2461,10 @@ async function handleGetSavedHtml(leadId, templateKey, env) {
 // ── Send Code Email (no-code users) ──────────────────────
 async function sendCodeEmail(env, leadId, email, businessName, urls) {
   const templateLabels = { earlydog: "Klassisch", bia: "Modern", liveblocks: "Frisch", loveseen: "Elegant" };
+  const templateColors = { earlydog: "#e8f0e8", bia: "#f0e8e0", liveblocks: "#e0e8f0", loveseen: "#f0e0ec" };
+  const templateAccents = { earlydog: "#2d5a3d", bia: "#8b6914", liveblocks: "#1a3a5c", loveseen: "#6b3a5c" };
 
-  // Build 2x2 screenshot grid (light theme, matches cold outreach)
+  // Build 2x2 preview grid (styled HTML cards — no external screenshot service)
   let gridCells = "";
   let linkCount = 0;
   const orderedKeys = ["earlydog", "bia", "liveblocks", "loveseen"];
@@ -2293,13 +2472,7 @@ async function sendCodeEmail(env, leadId, email, businessName, urls) {
     const url = urls[key];
     if (url) {
       linkCount++;
-      const thumbUrl = `https://image.thum.io/get/width/560/crop/400/${url}`;
-      gridCells += `<td width="50%" style="padding:5px;">
-        <a href="${url}" target="_blank" style="display:block;text-decoration:none;color:#444;">
-          <img src="${thumbUrl}" width="100%" style="border:1px solid #ddd;border-radius:5px;display:block;" alt="${templateLabels[key] || key}">
-          <div style="text-align:center;font-size:12px;margin-top:6px;font-weight:600;">${templateLabels[key] || key} →</div>
-        </a>
-      </td>`;
+      gridCells += emailPreviewCard(url, templateLabels[key] || key, templateColors[key] || "#f0f0f0", templateAccents[key] || "#333");
     }
   }
 
@@ -2360,12 +2533,34 @@ async function handleEndSession(leadId, env) {
 }
 
 // ── Fetch URL Proxy (for cross-origin HTML in editor) ────
-async function handleFetchUrl(request) {
+function isAllowedFetchUrl(rawUrl) {
+  let parsed;
+  try { parsed = new URL(rawUrl); } catch { return false; }
+  // Only HTTPS — never fetch HTTP, data:, file:, or internal addresses
+  if (parsed.protocol !== "https:") return false;
+  // Block private/link-local ranges that could leak metadata
+  const blocked = /^(localhost|127\.|10\.|192\.168\.|169\.254\.|::1|fd[0-9a-f]{2}:)/i;
+  if (blocked.test(parsed.hostname)) return false;
+  // Strict hostname allowlist — reject if hostname merely *contains* the string
+  if (/^[a-z0-9-]+\.pages\.dev$/.test(parsed.hostname)) return true;
+  if (parsed.hostname === "meine-kmu.ch" && parsed.pathname.startsWith("/draft/")) return true;
+  if (parsed.hostname === "meinekmu.pages.dev" && parsed.pathname.startsWith("/draft/")) return true;
+  return false;
+}
+
+async function handleFetchUrl(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonResp({ error: "Invalid request" }, 400); }
   const targetUrl = body.url;
-  if (!targetUrl || !targetUrl.includes(".pages.dev")) return jsonResp({ error: "Invalid URL" }, 400);
+  if (!targetUrl || !isAllowedFetchUrl(targetUrl)) return jsonResp({ error: "Invalid URL" }, 400);
   try {
+    // For draft URLs, read directly from KV
+    const draftMatch = targetUrl.match(/\/draft\/([a-f0-9]+)\/(earlydog|bia|liveblocks|loveseen)/);
+    if (draftMatch && env.DRAFTS_KV) {
+      const html = await env.DRAFTS_KV.get(`${draftMatch[1]}/${draftMatch[2]}`);
+      if (html) return jsonResp({ html });
+      return jsonResp({ error: "Draft not found" }, 404);
+    }
     const resp = await fetch(targetUrl);
     const html = await resp.text();
     return jsonResp({ html });
@@ -2438,7 +2633,7 @@ export default {
         if (endSessionMatch && request.method === "POST") return handleEndSession(endSessionMatch[1], env);
 
         // POST /api/fetch-url (proxy for cross-origin HTML fetch)
-        if (path === "/api/fetch-url" && request.method === "POST") return handleFetchUrl(request);
+        if (path === "/api/fetch-url" && request.method === "POST") return handleFetchUrl(request, env);
 
         // POST /api/lead/:id/order
         const orderMatch = path.match(/^\/api\/lead\/([^\/]+)\/order$/);
@@ -2460,7 +2655,20 @@ export default {
         if (path === "/api/check-domains" && request.method === "POST")
           return handleCheckDomains(request);
 
-        // GET /api/lead/:id/confirm-live — mark lead as live + send customer email (triggered from internal notification)
+        // GET /api/confirm-live?token=<one-time-token> — preferred path (token from KV)
+        if (path === "/api/confirm-live" && request.method === "GET") {
+          const token = url.searchParams.get("token");
+          if (!token || !env.DRAFTS_KV)
+            return new Response("<h1>Ungültiger Link</h1>", { status: 400, headers: { "Content-Type": "text/html" } });
+          const targetLeadId = await env.DRAFTS_KV.get(`confirm_token:${token}`);
+          if (!targetLeadId)
+            return new Response("<h1>Link abgelaufen oder bereits verwendet</h1>", { status: 401, headers: { "Content-Type": "text/html" } });
+          // Consume the token immediately (one-time use)
+          await env.DRAFTS_KV.delete(`confirm_token:${token}`);
+          return handleConfirmLive(targetLeadId, env);
+        }
+
+        // GET /api/lead/:id/confirm-live — legacy fallback (secret in URL, kept for backward compat)
         const confirmLiveMatch = path.match(/^\/api\/lead\/([^\/]+)\/confirm-live$/);
         if (confirmLiveMatch && request.method === "GET") {
           const secret = url.searchParams.get("secret");
@@ -2485,12 +2693,31 @@ export default {
         return jsonResp({ error: "Not found" }, 404);
       } catch (e) {
         console.error("API error:", e);
-        return jsonResp({ error: "Internal server error: " + e.message }, 500);
+        return jsonResp({ error: "Interner Fehler. Bitte versuche es erneut." }, 500);
       }
     }
 
-    // Everything else → serve static assets
-    return env.ASSETS.fetch(request);
+    // Serve draft previews from KV
+    const draftMatch = path.match(/^\/draft\/([a-f0-9]+)\/(earlydog|bia|liveblocks|loveseen)$/);
+    if (draftMatch) {
+      if (!env.DRAFTS_KV) return new Response("KV not configured", { status: 500 });
+      const html = await env.DRAFTS_KV.get(`${draftMatch[1]}/${draftMatch[2]}`);
+      if (!html) return new Response("Draft not found", { status: 404 });
+      return new Response(html, { headers: { "Content-Type": "text/html;charset=UTF-8", "Cache-Control": "no-cache" } });
+    }
+
+    // Everything else → serve static assets (with cache-busting for HTML/JS/CSS)
+    const assetResp = await env.ASSETS.fetch(request);
+    const assetUrl = new URL(request.url);
+    const ext = assetUrl.pathname.split('.').pop().toLowerCase();
+    if (['html', 'js', 'css'].includes(ext) || assetUrl.pathname === '/' || assetUrl.pathname.endsWith('/')) {
+      const newResp = new Response(assetResp.body, assetResp);
+      newResp.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      newResp.headers.set('Pragma', 'no-cache');
+      newResp.headers.set('Expires', '0');
+      return newResp;
+    }
+    return assetResp;
   },
 
   // Daily cron: process reminders, cold follow-ups, DNS checks

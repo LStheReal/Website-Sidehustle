@@ -1,0 +1,10 @@
+{"ts": "2026-04-10T09:22:08Z", "level": "info", "component": "auto_emailer", "msg": "auto_emailer starting", "dry_run": true, "only_lead_id": null, "sender": "info@meine-kmu.ch"}
+{"ts": "2026-04-10T09:22:08Z", "level": "error", "component": "auto_emailer", "msg": "auto_emailer crashed", "error": "RuntimeError('LEADS_SHEET_ID is not set and --sheet-id was not provided')"}
+{"ts": "2026-04-10T09:22:31Z", "level": "info", "component": "auto_emailer", "msg": "auto_emailer starting", "dry_run": true, "only_lead_id": null, "sender": "info@meine-kmu.ch"}
+{"ts": "2026-04-10T09:22:32Z", "level": "info", "component": "auto_emailer", "msg": "Would send", "lead_id": "7b0c3ba63d6a", "business": "Lumani GmbH", "variant": "day14", "to": "lumani2531@hotmail.com", "days_since": 16, "subject": "Letzte Nachricht — Lumani GmbH"}
+{"ts": "2026-04-10T09:22:32Z", "level": "info", "component": "auto_emailer", "msg": "Would update sheet (dry run)", "cells": 3}
+{"ts": "2026-04-10T09:22:32Z", "level": "info", "component": "auto_emailer", "msg": "auto_emailer summary", "total_rows": 66, "skipped": 65, "sent_day7": 0, "sent_day14": 1, "call_needed": 0, "failed": 0, "dry_run": true}
+{"ts": "2026-04-10T14:34:23Z", "level": "info", "component": "auto_emailer", "msg": "auto_emailer starting", "dry_run": true, "only_lead_id": null, "sender": "info@meine-kmu.ch"}
+{"ts": "2026-04-10T14:34:27Z", "level": "info", "component": "auto_emailer", "msg": "Would send", "lead_id": "7b0c3ba63d6a", "business": "Lumani GmbH", "variant": "day14", "to": "lumani2531@hotmail.com", "days_since": 16, "subject": "Letzte Nachricht — Lumani GmbH"}
+{"ts": "2026-04-10T14:34:27Z", "level": "info", "component": "auto_emailer", "msg": "Would update sheet (dry run)", "cells": 3}
+{"ts": "2026-04-10T14:34:27Z", "level": "info", "component": "auto_emailer", "msg": "auto_emailer summary", "total_rows": 66, "skipped": 65, "sent_day7": 0, "sent_day14": 1, "call_needed": 0, "failed": 0, "dry_run": true}

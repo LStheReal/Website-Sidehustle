@@ -134,6 +134,37 @@
             </div>
             </section>
 
+        <!-- Contact Section -->
+        <section class="contact" id="contact">
+            <div class="contact-inner">
+                <a href="#top" class="contact-logo">{{BUSINESS_NAME}}</a>
+                <p class="contact-tagline">{{CONTACT_TAGLINE}}</p>
+                <form class="contact-email-form" onsubmit="event.preventDefault()">
+                    <input type="email" class="email-input" placeholder="{{EMAIL_PLACEHOLDER}}">
+                    <button type="submit" class="email-submit">→</button>
+                </form>
+                <div class="contact-divider"></div>
+                <div class="contact-details">
+                    <div class="contact-item">
+                        <span class="contact-label">{{CONTACT_LABEL_PHONE}}</span>
+                        <a href="tel:{{PHONE}}">{{PHONE}}</a>
+                    </div>
+                    <div class="contact-item">
+                        <span class="contact-label">{{CONTACT_LABEL_EMAIL}}</span>
+                        <a href="mailto:{{EMAIL}}">{{EMAIL}}</a>
+                    </div>
+                    <div class="contact-item">
+                        <span class="contact-label">{{CONTACT_LABEL_ADDRESS}}</span>
+                        <span>{{ADDRESS}}</span>
+                    </div>
+                    <div class="contact-item">
+                        <span class="contact-label">{{CONTACT_LABEL_HOURS}}</span>
+                        <span>{{OPENING_HOURS}}</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </main>
 
     <!-- Footer -->

@@ -1,0 +1,40 @@
+{
+  "_comment": "Target matrix for systematic lead scraping. Add trades/cities here to expand coverage.",
+  "trades": [
+    {"key": "maler",            "label": "Maler",              "gmaps_term": "Malerei"},
+    {"key": "elektriker",       "label": "Elektriker",         "gmaps_term": "Elektriker"},
+    {"key": "schreiner",        "label": "Schreiner",          "gmaps_term": "Schreinerei"},
+    {"key": "coiffeur",         "label": "Coiffeur",           "gmaps_term": "Coiffeur"},
+    {"key": "gärtner",          "label": "Gärtner",            "gmaps_term": "Gartenbau"},
+    {"key": "reinigung",        "label": "Reinigung",          "gmaps_term": "Reinigungsfirma"},
+    {"key": "kosmetik",         "label": "Kosmetik",           "gmaps_term": "Kosmetikstudio"},
+    {"key": "massage",          "label": "Massage",            "gmaps_term": "Massage"},
+    {"key": "nagelstudio",      "label": "Nagelstudio",        "gmaps_term": "Nagelstudio"}
+  ],
+  "cities": [
+    {"key": "zürich",           "label": "Zürich",             "local_ch_key": "zuerich",          "population": 415000},
+    {"key": "basel",            "label": "Basel",              "local_ch_key": "basel",             "population": 178000},
+    {"key": "bern",             "label": "Bern",               "local_ch_key": "bern",              "population": 134000},
+    {"key": "winterthur",       "label": "Winterthur",         "local_ch_key": "winterthur",        "population": 115000},
+    {"key": "luzern",           "label": "Luzern",             "local_ch_key": "luzern",            "population": 82000},
+    {"key": "st-gallen",        "label": "St. Gallen",         "local_ch_key": "st-gallen",         "population": 76000},
+    {"key": "biel",             "label": "Biel",               "local_ch_key": "biel",              "population": 56000},
+    {"key": "thun",             "label": "Thun",               "local_ch_key": "thun",              "population": 43000},
+    {"key": "köniz",            "label": "Köniz",              "local_ch_key": "koeniz",            "population": 42000},
+    {"key": "fribourg",         "label": "Fribourg",           "local_ch_key": "fribourg",          "population": 38000},
+    {"key": "chur",             "label": "Chur",               "local_ch_key": "chur",              "population": 38000},
+    {"key": "schaffhausen",     "label": "Schaffhausen",       "local_ch_key": "schaffhausen",      "population": 36000},
+    {"key": "uster",            "label": "Uster",              "local_ch_key": "uster",             "population": 34000},
+    {"key": "zug",              "label": "Zug",                "local_ch_key": "zug",               "population": 29000},
+    {"key": "frauenfeld",       "label": "Frauenfeld",         "local_ch_key": "frauenfeld",        "population": 25000},
+    {"key": "dietikon",         "label": "Dietikon",           "local_ch_key": "dietikon",          "population": 26000},
+    {"key": "wil",              "label": "Wil",                "local_ch_key": "wil",               "population": 24000},
+    {"key": "kreuzlingen",      "label": "Kreuzlingen",        "local_ch_key": "kreuzlingen",       "population": 21000},
+    {"key": "aarau",            "label": "Aarau",              "local_ch_key": "aarau",             "population": 21000},
+    {"key": "wettingen",        "label": "Wettingen",          "local_ch_key": "wettingen",         "population": 20000},
+    {"key": "olten",            "label": "Olten",              "local_ch_key": "olten",             "population": 17000},
+    {"key": "grenchen",         "label": "Grenchen",           "local_ch_key": "grenchen",          "population": 16000},
+    {"key": "solothurn",        "label": "Solothurn",          "local_ch_key": "solothurn",         "population": 16000},
+    {"key": "baden",            "label": "Baden",              "local_ch_key": "baden",             "population": 19000}
+  ]
+}

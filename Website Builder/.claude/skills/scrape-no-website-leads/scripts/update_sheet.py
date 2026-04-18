@@ -92,6 +92,9 @@ LEAD_COLUMNS = [
     "next_action",
     "next_action_date",
     "acquisition_source",
+    # WhatsApp tracking (cols 43-44)
+    "whatsapp_sent_date",
+    "whatsapp_status",
 ]
 
 # Column ranges for color coding (1-indexed)
@@ -99,7 +102,7 @@ METADATA_COLS = (1, 3)       # A-C: light grey
 BUSINESS_COLS = (4, 13)      # D-M: light blue
 CONTACT_COLS = (14, 20)      # N-T: light green
 STATUS_COLS = (21, 34)       # U-AH: light yellow
-TRACKING_COLS = (35, 42)     # AI-AP: light purple
+TRACKING_COLS = (35, 44)     # AI-AR: light purple (includes WhatsApp)
 
 # Status dropdown values
 STATUS_VALUES = [

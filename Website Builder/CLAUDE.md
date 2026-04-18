@@ -2,21 +2,23 @@
 
 ## Project Overview
 
-Automated pipeline that finds businesses without websites, builds websites for them, sends cold email outreach, and tracks everything in Google Sheets.
+Automated pipeline that finds businesses without websites, builds websites for them, does WhatsApp/phone/email outreach, and tracks everything in Google Sheets.
 
-**Target market:** Switzerland & Europe (Swiss/German/French/Italian directories).
+**Target market:** Switzerland (German-speaking, local.ch directory).
 
 **Pipeline stages:**
-1. **Scrape** — Find businesses on Google Maps without a real website
-2. **Build 3 Drafts** — Create all 3 template versions using Google Maps data
-3. **Deploy Drafts** — Deploy all 3 to Cloudflare Pages (free, temporary URLs)
-4. **Cold Outreach** — Email/call with 3 live website links
-5. **They Choose** — Customer picks their favorite design
-6. **Onboarding** — Collect values, logo, images, domain preference
-7. **Build Final** — Refine chosen template with their real content
-8. **Find Domain** — Find available .ch/.com domains (only after commitment)
-9. **Deploy Final** — Deploy on their chosen domain
-10. **Payment** — They pay once final site is live
+1. **Scrape** — Find businesses on local.ch without a real website
+2. **Build 4 Drafts** — Create all 4 template versions using scraped data
+3. **Deploy Drafts** — Deploy all 4 to Cloudflare Pages (free, temporary URLs)
+4. **WhatsApp** — Send WhatsApp with 4 live website links (Day 0, all leads have phone)
+5. **Phone Call** — Follow-up call with personalized script (Day 3)
+6. **Email Follow-up** — Email with links (Day 7, only for leads with email)
+7. **They Choose** — Customer picks their favorite design
+8. **Onboarding** — Collect values, logo, images, domain preference
+9. **Build Final** — Refine chosen template with their real content
+10. **Find Domain** — Find available .ch/.com domains (only after commitment)
+11. **Deploy Final** — Deploy on their chosen domain
+12. **Payment** — They pay once final site is live
 
 ## The Skills Architecture
 
@@ -41,7 +43,7 @@ Automated pipeline that finds businesses without websites, builds websites for t
 ## Available Skills
 
 ### Lead Generation
-- `scrape-no-website-leads` — Find businesses on Google Maps that have no real website, enrich with owner contact info, save to Google Sheets.
+- `scrape-no-website-leads` — Find businesses on local.ch that have no real website, enrich with owner contact info, save to Google Sheets. Uses smart_scrape.py for coverage-aware batch scraping (9 trades x 24 cities). Google Maps source disabled (zero yield).
 
 ### Website Building
 - `build-website-bia` — Professional editorial template (serif, split-screen, gold accents)
@@ -57,12 +59,13 @@ Automated pipeline that finds businesses without websites, builds websites for t
 - `process-order` — **Post-order automation**: triggered automatically after "Website jetzt bestellen" is clicked. Builds the final site, deploys to a unique `kmu-<slug>-<id>.pages.dev` subdomain, updates the sheet, sends internal notification to info@meine-kmu.ch (with live URL, domain purchase link, Cloudflare setup link, lead email), and sends customer thank-you email with 48h promise.
 
 ### Outreach
-- `cold-email` — Generate personalized German cold emails (Day 0 intro + Day 7 follow-up + Day 14 breakup) with 3 live website links.
-- `call-assistant` — Generate German call cheat sheet with opening script, objection handling, SMS/WhatsApp template. For no-email leads or phone follow-up.
+- `whatsapp-outreach` — **Primary outreach channel.** Generate personalized German WhatsApp messages with clickable wa.me deep links. All leads have phone numbers. Variants: day0 (first contact), post_call (after phone), followup (Day 7 reminder).
+- `call-assistant` — Generate word-for-word German call scripts for beginners. Includes confidence builders, decision tree, objection handling, and clickable wa.me link to send WhatsApp right after the call. Supports 3 contexts: cold, post-email, post-whatsapp.
+- `cold-email` — Generate personalized German cold emails (Day 7 follow-up + Day 14 breakup). Used as secondary channel for leads that have email addresses.
 - `write-email` — General-purpose German email for all stages: onboarding, status update, domain confirmation, delivery, invoice, support.
 
 ### Orchestration
-- `pipeline-manager` — Orchestrator that coordinates all skills. Reads Google Sheet, runs automated steps (build, deploy, generate emails/scripts), tracks lead status, and tells you what manual actions are needed. Commands: `report` (status overview), `process` (batch all leads), `process-one` (single lead).
+- `pipeline-manager` — Orchestrator that coordinates all skills. Reads Google Sheet, runs automated steps (build, deploy, generate WhatsApp/emails/scripts), tracks lead status, and tells you what manual actions are needed. Commands: `report` (status overview), `process` (batch all leads), `process-one` (single lead), `send-whatsapp` (generate wa.me links for website_created leads), `send-emails` (send cold emails).
 
 ## Conversational Interface
 
@@ -72,26 +75,84 @@ You are the project manager. The user should never need to know script names, CL
 
 | User says | You do |
 |---|---|
-| "scrape leads for X" / "find businesses" | Run `scrape-no-website-leads` skill |
+| "scrape leads for X" / "find businesses" | **Spawn subagent** (see Subagent Tasks below) |
 | "overview" / "status" / "what's going on" | Run `quick_status.py --format json`, summarize in 5-8 lines |
 | "what should I do next" | Run `quick_status.py --format json`, highlight top 3 priorities |
-| "process everything" / "run pipeline" | Run `pipeline-manager --action process` |
-| "build website for [name]" / "process [name]" | Find lead via `--find-lead "name"`, then `--action process-one --lead-id ...` |
-| "send emails" / "outreach" | Run `pipeline-manager --action send-emails` |
+| "process everything" / "run pipeline" | **Spawn subagent** (see Subagent Tasks below) |
+| "build website for [name]" / "process [name]" | **Spawn subagent** (see Subagent Tasks below) |
+| "send whatsapp" / "outreach" | Run `pipeline-manager --action send-whatsapp` |
+| "send emails" | Run `pipeline-manager --action send-emails` |
 | "write email to [name]" | Find lead, infer stage from status, run `write-email` |
 | "find domain for [name]" | Run `find-domain` |
-| "prepare call for [name]" | Run `call-assistant` |
-| "adapt/customize website for [name]" | Run `adapt-website` |
+| "prepare call for [name]" | Run `call-assistant` (generates word-for-word script + wa.me link) |
+| "adapt/customize website for [name]" | **Spawn subagent** (see Subagent Tasks below) |
 | "deploy [name]" | Run `deploy-website` |
+
+### Subagent Tasks
+
+Heavy, multi-step operations (scraping, building, processing) run in a **subagent** to keep the main conversation context small. The subagent gets a fresh context, runs all the scripts, and returns only a short summary to the main conversation.
+
+**Always use the `general-purpose` subagent type.**
+**Always activate the venv in every bash command:** `source .venv/bin/activate && ...`
+**Working directory for all scripts:** `/Users/louiseschule/Documents/Website-Sidehustle/Website Builder`
+
+#### Scrape leads subagent prompt template
+```
+You are running the local.ch lead generation pipeline in /Users/louiseschule/Documents/Website-Sidehustle/Website Builder.
+
+Task: Scrape ~[LIMIT] no-website businesses using the coverage-aware batch scraper.
+
+Run this command (activate venv first):
+  cd "/Users/louiseschule/Documents/Website-Sidehustle/Website Builder" && source .venv/bin/activate && python3 .claude/skills/scrape-no-website-leads/scripts/smart_scrape.py batch --target [LIMIT] --source local.ch 2>&1 | tee /tmp/scrape_batch.log
+
+The batch command automatically:
+- Picks the highest-potential uncovered trade × city combos (never duplicates)
+- Runs up to 3 combos in parallel
+- Stops each combo early if yield is too low (< 1.5% after 40 businesses)
+- Continues until [LIMIT] total leads are found
+
+Each combo that finishes, print a clear update line like:
+  ✓ Combo done: [trade] in [city] → [N] leads found [total so far: X/[LIMIT]]
+
+When done, report back:
+- Total leads added to Google Sheets
+- Each combo that ran and how many leads it found
+- Any errors
+```
+
+#### Process / build website subagent prompt template
+```
+You are running the pipeline manager in /Users/louiseschule/Documents/Website-Sidehustle/Website Builder.
+
+Task: [SPECIFIC TASK — e.g., "process all new leads" or "build website for lead_id abc123"]
+
+Run (activate venv first):
+  cd "Website Builder" && source .venv/bin/activate && python3 .claude/skills/pipeline-manager/scripts/pipeline_manager.py --action [ACTION] [--lead-id ID]
+
+Report back: what was processed, draft URLs generated, any errors.
+```
+
+#### Adapt website subagent prompt template
+```
+You are running the adapt-website skill in /Users/louiseschule/Documents/Website-Sidehustle/Website Builder.
+
+Task: Customize the website for [BUSINESS NAME] with the customer's input: [INPUT SUMMARY].
+
+1. Find the lead: source .venv/bin/activate && python3 .claude/skills/pipeline-manager/scripts/pipeline_manager.py --find-lead "[BUSINESS NAME]"
+2. Run adapt-website with the lead_id and customer input.
+
+Report back: which template was customized, the live URL, any errors.
+```
 
 ### Behavioral Rules
 
 1. **Don't ask which skill to use** — auto-route from intent. Just confirm what you're about to do for destructive/send actions.
-2. **Resolve names, not IDs** — When the user says a business name, use `pipeline_manager.py --find-lead "name"` to get the lead_id. Never ask for hex IDs.
-3. **Summarize, don't dump** — For status/overview, keep it conversational: how many leads at each stage, top priorities, what to do now. No raw script output.
-4. **Prioritize actions** — overdue follow-ups > leads needing emails > new leads to scrape.
-5. **Use `--format json`** — Always pass `--format json` to pipeline_manager scripts. Parse the JSON yourself and present a clean summary. This saves tokens.
-6. **Use lightweight scripts first** — For status checks, use `quick_status.py` (read-only, fast). Only run full `pipeline_manager.py --action report` if detailed action items are needed.
+2. **Spawn subagents for heavy tasks** — Scraping, processing, and website building all run in subagents. Never run these directly in the main conversation. This keeps context small and cheap.
+3. **Resolve names, not IDs** — When the user says a business name, use `pipeline_manager.py --find-lead "name"` to get the lead_id. Never ask for hex IDs.
+4. **Summarize, don't dump** — For status/overview, keep it conversational: how many leads at each stage, top priorities, what to do now. No raw script output.
+5. **Prioritize actions** — overdue follow-ups > leads needing emails > new leads to scrape.
+6. **Use `--format json`** — Always pass `--format json` to pipeline_manager scripts. Parse the JSON yourself and present a clean summary. This saves tokens.
+7. **Use lightweight scripts first** — For status checks, use `quick_status.py` (read-only, fast). Only run full `pipeline_manager.py --action report` if detailed action items are needed.
 
 ### Quick Status Script
 ```bash

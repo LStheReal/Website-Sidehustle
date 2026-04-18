@@ -63,6 +63,10 @@ from generate_cold_email import (
 sys.path.insert(0, str(SKILLS_DIR / "call-assistant" / "scripts"))
 from generate_call_script import generate_call_script
 
+# WhatsApp outreach
+sys.path.insert(0, str(SKILLS_DIR / "whatsapp-outreach" / "scripts"))
+from send_whatsapp import generate_for_lead as generate_whatsapp_for_lead, format_swiss_phone
+
 # Write email (general)
 sys.path.insert(0, str(SKILLS_DIR / "write-email" / "scripts"))
 from generate_email import GENERATORS as EMAIL_GENERATORS
@@ -157,6 +161,8 @@ COL = {
     "next_action": 40,
     "next_action_date": 41,
     "acquisition_source": 42,
+    "whatsapp_sent_date": 43,
+    "whatsapp_status": 44,
 }
 
 COLUMN_NAMES = list(COL.keys())
@@ -390,77 +396,26 @@ def process_new(lead: dict, worksheet, sender_info: dict) -> list[dict]:
         if template_name in draft_urls and i < 4:
             sheet_updates[url_cols[i]] = draft_urls[template_name]
 
-    # Step 4: Generate outreach
+    # Step 4: Update next actions
     owner_email = lead.get("owner_email", "").strip()
     owner_name = lead.get("owner_name", "").strip()
 
-    # Get the 3 URLs in order for email/call script
-    url_list = [draft_urls.get(t, "") for t in template_order]
-    url1 = url_list[0] if len(url_list) > 0 else ""
-    url2 = url_list[1] if len(url_list) > 1 else ""
-    url3 = url_list[2] if len(url_list) > 2 else ""
-    url4 = url_list[3] if len(url_list) > 3 else ""
-    if not url4:
-        url4 = url3 or url2 or url1
-
     if owner_email:
-        # Generate cold email
-        ss1 = get_screenshot_url(url1)
-        ss2 = get_screenshot_url(url2)
-        ss3 = get_screenshot_url(url3)
-        ss4 = get_screenshot_url(url4)
-        email = generate_day0_email(
-            business_name=biz,
-            owner_name=owner_name,
-            url1=url1, url2=url2, url3=url3, url4=url4,
-            ss1=ss1, ss2=ss2, ss3=ss3, ss4=ss4,
-            lead_id=lead_id,
-            sender_name=sender_info["name"],
-            sender_phone=sender_info["phone"],
-            sender_email=sender_info["email"],
-        )
-        email_result = {
-            "generated_at": datetime.now().isoformat(),
-            "recipient": {"business_name": biz, "owner_email": owner_email},
-            "emails": [email],
-        }
-        email_path = save_intermediate(email_result, f"cold_email_{lead_id}")
-        sheet_updates["next_action"] = f"SEND EMAIL to {owner_email}"
-        sheet_updates["next_action_date"] = datetime.now().strftime("%Y-%m-%d")
-
+        sheet_updates["next_action"] = f"READY TO SEND EMAIL"
         actions.append({
-            "type": "SEND_EMAIL",
-            "priority": "HIGH",
+            "type": "READY_FOR_OUTREACH",
+            "priority": "LOW",
             "business": biz,
-            "to": owner_email,
-            "subject": email["subject"],
-            "file": email_path,
-            "message": f"Send cold email to {owner_email} — copy from {email_path}",
+            "message": f"Website built for {biz}. Run action send-emails to send cold email.",
         })
     else:
-        # Generate call script
         phone = lead.get("phone", "")
-        script = generate_call_script(
-            business_name=biz,
-            category=category,
-            city=city,
-            phone=phone,
-            owner_name=owner_name,
-            url1=url1, url2=url2, url3=url3,
-            sender_name=sender_info["name"],
-            email_sent=False,
-        )
-        script_path = save_intermediate(script, f"call_script_{lead_id}")
-        sheet_updates["next_action"] = f"CALL {phone}"
-        sheet_updates["next_action_date"] = datetime.now().strftime("%Y-%m-%d")
-
+        sheet_updates["next_action"] = f"READY TO CALL"
         actions.append({
-            "type": "CALL",
-            "priority": "HIGH",
+            "type": "READY_FOR_OUTREACH",
+            "priority": "LOW",
             "business": biz,
-            "phone": phone,
-            "file": script_path,
-            "message": f"No email found. Call {biz} at {phone} — script at {script_path}",
+            "message": f"Website built for {biz}. No email found, ready for call.",
         })
 
     # Write all updates to sheet
@@ -503,65 +458,43 @@ def process_website_created(lead: dict, worksheet, sender_info: dict) -> list[di
 
     print(f"\n  Generating outreach for: {biz}")
 
-    sheet_updates = {}
+    phone = lead.get("phone", "")
 
-    if owner_email:
-        ss1 = get_screenshot_url(url1)
-        ss2 = get_screenshot_url(url2)
-        ss3 = get_screenshot_url(url3)
-        ss4 = get_screenshot_url(url4)
-        email = generate_day0_email(
-            business_name=biz,
-            owner_name=owner_name,
-            url1=url1, url2=url2, url3=url3, url4=url4,
-            ss1=ss1, ss2=ss2, ss3=ss3, ss4=ss4,
-            lead_id=lead_id,
-            sender_name=sender_info["name"],
-            sender_phone=sender_info["phone"],
-            sender_email=sender_info["email"],
-        )
-        email_result = {
-            "generated_at": datetime.now().isoformat(),
-            "recipient": {"business_name": biz, "owner_email": owner_email},
-            "emails": [email],
-        }
-        email_path = save_intermediate(email_result, f"cold_email_{lead_id}")
-        # DO NOT set status to "email_sent" here — email is only generated, not sent.
-        # Actual sending happens in action_send_emails which calls send_email() via SMTP.
-        sheet_updates["next_action"] = f"SEND EMAIL to {owner_email}"
-        sheet_updates["next_action_date"] = datetime.now().strftime("%Y-%m-%d")
+    # WhatsApp-first: all leads have phone numbers
+    if phone:
+        wa_result = generate_whatsapp_for_lead(lead, sender_info["name"], variant="day0")
+        if "error" in wa_result:
+            actions.append({
+                "type": "WARNING",
+                "priority": "MEDIUM",
+                "business": biz,
+                "message": f"{biz}: WhatsApp error: {wa_result['error']}",
+            })
+        else:
+            actions.append({
+                "type": "SEND_WHATSAPP",
+                "priority": "HIGH",
+                "business": biz,
+                "phone": phone,
+                "wa_me_link": wa_result.get("wa_me_link", ""),
+                "message": f"WHATSAPP SENDEN: {biz} — {phone}",
+            })
 
-        actions.append({
-            "type": "SEND_EMAIL",
-            "priority": "HIGH",
-            "business": biz,
-            "to": owner_email,
-            "subject": email["subject"],
-            "file": email_path,
-            "message": f"Send cold email to {owner_email} — copy from {email_path}",
-        })
+        if owner_email:
+            actions.append({
+                "type": "INFO",
+                "priority": "LOW",
+                "business": biz,
+                "message": f"{biz}: Has email ({owner_email}) — Day 7 email follow-up available after WhatsApp.",
+            })
     else:
-        phone = lead.get("phone", "")
-        script = generate_call_script(
-            business_name=biz, category=category, city=city,
-            phone=phone, owner_name=owner_name,
-            url1=url1, url2=url2, url3=url3,
-            sender_name=sender_info["name"], email_sent=False,
-        )
-        script_path = save_intermediate(script, f"call_script_{lead_id}")
-        sheet_updates["next_action"] = f"CALL {phone}"
-        sheet_updates["next_action_date"] = datetime.now().strftime("%Y-%m-%d")
-
         actions.append({
-            "type": "CALL",
+            "type": "WARNING",
             "priority": "HIGH",
             "business": biz,
-            "phone": phone,
-            "file": script_path,
-            "message": f"No email found. Call {biz} at {phone} — script at {script_path}",
+            "message": f"{biz}: No phone number! Cannot send WhatsApp. Manual outreach needed.",
         })
 
-    update_cells(worksheet, row_idx, sheet_updates)
     return actions
 
 
@@ -695,6 +628,164 @@ def process_email_sent(lead: dict, worksheet, sender_info: dict) -> list[dict]:
             "priority": "LOW",
             "business": biz,
             "message": f"{biz}: Email sent {days_since} day(s) ago. Follow-up call due on {next_date}.",
+        })
+
+    if sheet_updates:
+        update_cells(worksheet, row_idx, sheet_updates)
+
+    return actions
+
+
+def process_whatsapp_sent(lead: dict, worksheet, sender_info: dict) -> list[dict]:
+    """
+    Process a 'whatsapp_sent' lead: Day 3 call, Day 7 email/WA follow-up, Day 14 breakup.
+    """
+    actions = []
+    biz = lead["business_name"]
+    lead_id = lead["lead_id"]
+    row_idx = lead["_row_idx"]
+    category = lead.get("category", "")
+    city = lead.get("city", "")
+    owner_email = lead.get("owner_email", "").strip()
+    owner_name = lead.get("owner_name", "").strip()
+    phone = lead.get("phone", "")
+
+    # Calculate days since WhatsApp
+    wa_date_str = lead.get("whatsapp_sent_date", "").strip()
+    if not wa_date_str:
+        actions.append({
+            "type": "WARNING",
+            "priority": "LOW",
+            "business": biz,
+            "message": f"{biz}: whatsapp_sent but no whatsapp_sent_date. Update the sheet.",
+        })
+        return actions
+
+    try:
+        wa_date = datetime.strptime(wa_date_str, "%Y-%m-%d")
+    except ValueError:
+        actions.append({
+            "type": "WARNING",
+            "priority": "LOW",
+            "business": biz,
+            "message": f"{biz}: Invalid whatsapp_sent_date format: '{wa_date_str}'. Use YYYY-MM-DD.",
+        })
+        return actions
+
+    days_since = (datetime.now() - wa_date).days
+
+    # Get draft URLs
+    url1 = lead.get("draft_url_1", "")
+    url2 = lead.get("draft_url_2", "")
+    url3 = lead.get("draft_url_3", "")
+    url4 = lead.get("draft_url_4", "") or url3 or url2 or url1
+
+    sheet_updates = {}
+
+    if days_since >= 14:
+        if owner_email:
+            # Day 14: Breakup email
+            email = generate_day14_email(
+                business_name=biz,
+                owner_name=owner_name,
+                lead_id=lead_id,
+                sender_name=sender_info["name"],
+                sender_phone=sender_info["phone"],
+                sender_email=sender_info["email"],
+            )
+            email_path = save_intermediate({"emails": [email]}, f"breakup_email_{lead_id}")
+            sheet_updates["next_action"] = f"SEND BREAKUP EMAIL ({days_since} days)"
+            sheet_updates["next_action_date"] = datetime.now().strftime("%Y-%m-%d")
+            actions.append({
+                "type": "SEND_EMAIL",
+                "priority": "MEDIUM",
+                "business": biz,
+                "to": owner_email,
+                "days_since_whatsapp": days_since,
+                "file": email_path,
+                "message": f"Day {days_since}: Send breakup email to {owner_email}",
+            })
+        else:
+            # No email — mark as closed
+            sheet_updates["next_action"] = "CLOSED — no response after 14 days"
+            sheet_updates["status"] = "closed_no_response"
+            actions.append({
+                "type": "INFO",
+                "priority": "LOW",
+                "business": biz,
+                "message": f"{biz}: No response after {days_since} days (no email for breakup). Closed.",
+            })
+
+    elif days_since >= 7:
+        if owner_email:
+            # Day 7: Email follow-up
+            email = generate_day7_email(
+                business_name=biz,
+                category=category,
+                owner_name=owner_name,
+                url1=url1, url2=url2, url3=url3, url4=url4,
+                lead_id=lead_id,
+                sender_name=sender_info["name"],
+                sender_phone=sender_info["phone"],
+                sender_email=sender_info["email"],
+            )
+            email_path = save_intermediate({"emails": [email]}, f"followup_email_{lead_id}")
+            sheet_updates["next_action"] = f"SEND FOLLOW-UP EMAIL ({days_since} days)"
+            sheet_updates["next_action_date"] = datetime.now().strftime("%Y-%m-%d")
+            actions.append({
+                "type": "SEND_EMAIL",
+                "priority": "HIGH",
+                "business": biz,
+                "to": owner_email,
+                "days_since_whatsapp": days_since,
+                "file": email_path,
+                "message": f"Day {days_since}: Send email follow-up to {owner_email}",
+            })
+        else:
+            # No email — WhatsApp follow-up
+            wa_result = generate_whatsapp_for_lead(lead, sender_info["name"], variant="followup")
+            if "error" not in wa_result:
+                sheet_updates["next_action"] = f"SEND WA FOLLOW-UP ({days_since} days)"
+                sheet_updates["next_action_date"] = datetime.now().strftime("%Y-%m-%d")
+                actions.append({
+                    "type": "SEND_WHATSAPP",
+                    "priority": "HIGH",
+                    "business": biz,
+                    "phone": phone,
+                    "wa_me_link": wa_result.get("wa_me_link", ""),
+                    "message": f"Day {days_since}: Send WhatsApp follow-up to {biz} — {phone}",
+                })
+
+    elif days_since >= 3:
+        # Day 3+: Call follow-up
+        script = generate_call_script(
+            business_name=biz, category=category, city=city,
+            phone=phone, owner_name=owner_name,
+            url1=url1, url2=url2, url3=url3, url4=url4,
+            sender_name=sender_info["name"], whatsapp_sent=True,
+        )
+        script_path = save_intermediate(script, f"followup_call_{lead_id}")
+        sheet_updates["next_action"] = f"CALL FOLLOW-UP ({days_since} days since WhatsApp)"
+        sheet_updates["next_action_date"] = datetime.now().strftime("%Y-%m-%d")
+
+        actions.append({
+            "type": "CALL",
+            "priority": "HIGH",
+            "business": biz,
+            "phone": phone,
+            "days_since_whatsapp": days_since,
+            "file": script_path,
+            "message": f"Day {days_since}: Call {biz} at {phone} for follow-up",
+        })
+
+    else:
+        # Too early for follow-up
+        next_date = (wa_date + timedelta(days=3)).strftime("%Y-%m-%d")
+        actions.append({
+            "type": "WAIT",
+            "priority": "LOW",
+            "business": biz,
+            "message": f"{biz}: WhatsApp sent {days_since} day(s) ago. Call follow-up due on {next_date}.",
         })
 
     if sheet_updates:
@@ -879,6 +970,7 @@ def process_website_creating(lead: dict, worksheet, sender_info: dict) -> list[d
 PROCESSORS = {
     "new": process_new,
     "website_created": process_website_created,
+    "whatsapp_sent": process_whatsapp_sent,
     "email_sent": process_email_sent,
     "responded": process_responded,
     "website_creating": process_website_creating,
@@ -947,20 +1039,42 @@ def action_report(worksheet, sheet_title: str) -> dict:
             })
 
         elif status == "website_created":
-            if owner_email:
-                actions.append({
-                    "type": "SEND_EMAIL",
-                    "priority": "HIGH",
-                    "business": biz,
-                    "message": f"SEND EMAIL: {biz} — cold email to {owner_email}",
-                })
-            else:
-                actions.append({
-                    "type": "CALL",
-                    "priority": "HIGH",
-                    "business": biz,
-                    "message": f"CALL: {biz} — no email, call {phone}",
-                })
+            actions.append({
+                "type": "SEND_WHATSAPP",
+                "priority": "HIGH",
+                "business": biz,
+                "message": f"WHATSAPP SENDEN: {biz} — send WhatsApp to {phone}",
+            })
+
+        elif status == "whatsapp_sent":
+            wa_date_str = lead.get("whatsapp_sent_date", "").strip()
+            if wa_date_str:
+                try:
+                    wa_date = datetime.strptime(wa_date_str, "%Y-%m-%d")
+                    days = (datetime.now() - wa_date).days
+                    if days >= 7 and owner_email:
+                        actions.append({
+                            "type": "SEND_EMAIL",
+                            "priority": "HIGH",
+                            "business": biz,
+                            "message": f"EMAIL FOLLOW-UP: {biz} — {days} days since WhatsApp, send email to {owner_email}",
+                        })
+                    elif days >= 3:
+                        actions.append({
+                            "type": "CALL",
+                            "priority": "HIGH",
+                            "business": biz,
+                            "message": f"ANRUFEN: {biz} — {days} Tage seit WhatsApp, anrufen: {phone}",
+                        })
+                    else:
+                        actions.append({
+                            "type": "WAIT",
+                            "priority": "LOW",
+                            "business": biz,
+                            "message": f"WARTEN: {biz} — WhatsApp vor {days} Tag(en), Anruf ab Tag 3",
+                        })
+                except ValueError:
+                    pass
 
         elif status == "email_sent" and email_date_str:
             try:
@@ -1025,13 +1139,14 @@ def action_report(worksheet, sheet_title: str) -> dict:
     print(f"{'='*60}")
 
     # Status summary
-    status_order = ["new", "website_created", "email_sent", "responded",
-                    "website_creating", "sold", "rejected", "(empty)"]
+    status_order = ["new", "website_created", "whatsapp_sent", "email_sent", "responded",
+                    "website_creating", "sold", "rejected", "closed_no_response", "(empty)"]
     for s in status_order:
         if s in status_counts:
             hint = {
                 "new": "BUILD + DEPLOY ready",
-                "website_created": "OUTREACH ready",
+                "website_created": "WHATSAPP senden",
+                "whatsapp_sent": "check follow-up timing (call Day 3, email Day 7)",
                 "email_sent": "check follow-up timing",
                 "responded": "ONBOARDING needed",
                 "website_creating": "BUILD FINAL ready",
@@ -1392,12 +1507,102 @@ def action_send_emails(worksheet, sender_info: dict, sheet_title: str, count: in
     }
 
 
+def action_send_whatsapp(worksheet, sender_info: dict, sheet_title: str, count: int) -> dict:
+    """Generate WhatsApp wa.me links for leads with deployed websites."""
+    leads = read_all_leads(worksheet)
+
+    if not leads:
+        print("\n  No leads found in sheet.")
+        return {"generated": 0, "errors": []}
+
+    # Find leads ready for WhatsApp (website_created + has phone + has draft URLs)
+    ready_leads = [
+        l for l in leads
+        if l.get("status", "").strip().lower() == "website_created"
+        and l.get("phone", "").strip()
+        and any(l.get(f"draft_url_{i}", "") for i in range(1, 5))
+    ]
+
+    print(f"\n{'='*60}")
+    print(f"  Send WhatsApp Messages")
+    print(f"  Sheet: {sheet_title}")
+    print(f"  Ready to send: {len(ready_leads)}")
+    print(f"  Requested: {count}")
+    print(f"{'='*60}")
+
+    if not ready_leads:
+        print("\n  No leads ready for WhatsApp. Build websites first (status=new → process).")
+        return {"generated": 0, "errors": []}
+
+    generated = 0
+    errors = []
+    wa_links = []
+    send_list = ready_leads[:count]
+
+    for lead in send_list:
+        biz = lead.get("business_name", "?")
+        phone = lead.get("phone", "")
+        row_idx = lead["_row_idx"]
+
+        wa_result = generate_whatsapp_for_lead(lead, sender_info["name"], variant="day0")
+
+        if "error" in wa_result:
+            errors.append(f"{biz}: {wa_result['error']}")
+            print(f"  ERROR: {biz} — {wa_result['error']}")
+            continue
+
+        wa_links.append(wa_result)
+        generated += 1
+
+        # Update sheet
+        update_cells(worksheet, row_idx, {
+            "status": "whatsapp_sent",
+            "whatsapp_sent_date": datetime.now().strftime("%Y-%m-%d"),
+            "whatsapp_status": "wa_sent",
+            "next_action": "ANRUFEN (Tag 3)",
+            "next_action_date": (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d"),
+        })
+
+    # Print all wa.me links for clicking
+    if wa_links:
+        print(f"\n{'='*60}")
+        print(f"  Klicken Sie jeden Link — WhatsApp öffnet sich:")
+        print(f"{'='*60}")
+        for i, wa in enumerate(wa_links, 1):
+            print(f"\n  {i}. {wa['business_name']} ({wa['phone']})")
+            print(f"     {wa['wa_me_link']}")
+
+    # Summary
+    print(f"\n{'='*60}")
+    print(f"  WhatsApp Complete")
+    print(f"{'='*60}")
+    print(f"  Generated: {generated}/{count} requested")
+    if errors:
+        print(f"  Errors: {len(errors)}")
+        for err in errors:
+            print(f"    - {err}")
+
+    remaining = len([
+        l for l in leads
+        if l.get("status", "").strip().lower() in ("new", "website_created")
+        and l.get("phone", "").strip()
+    ]) - generated
+    print(f"  Leads remaining: {max(0, remaining)}")
+
+    return {
+        "generated": generated,
+        "wa_links": [{"business": w["business_name"], "link": w["wa_me_link"]} for w in wa_links],
+        "errors": errors,
+        "requested": count,
+    }
+
+
 # --- Main ---
 
 def main():
     parser = argparse.ArgumentParser(description="Pipeline Manager — Orchestrate the Website Builder pipeline")
     parser.add_argument("--sheet-url", help="Google Sheet URL with leads (default: LEADS_SHEET_URL from .env)")
-    parser.add_argument("--action", choices=["report", "process", "process-one", "send-emails"],
+    parser.add_argument("--action", choices=["report", "process", "process-one", "send-emails", "send-whatsapp"],
                         help="Action to perform")
     parser.add_argument("--find-lead", metavar="NAME", help="Fuzzy-search for a lead by business name")
     parser.add_argument("--lead-id", help="Lead ID (required for process-one)")
@@ -1419,10 +1624,13 @@ def main():
     if not args.sheet_url and CANONICAL_SHEET_URL:
         print(f"Using canonical sheet from .env: {CANONICAL_SHEET_URL}")
 
-    # Validate args
-    if args.action in ("process", "process-one", "send-emails"):
+    # Validate args — fall back to .env values if CLI args not provided
+    if args.action in ("process", "process-one", "send-emails", "send-whatsapp"):
+        args.sender_name = args.sender_name or os.getenv("SENDER_NAME", "")
+        args.sender_phone = args.sender_phone or os.getenv("SENDER_PHONE", "")
+        args.sender_email = args.sender_email or os.getenv("SENDER_EMAIL", "")
         if not all([args.sender_name, args.sender_email]):
-            parser.error("--sender-name and --sender-email are required for process/process-one/send-emails")
+            parser.error("--sender-name and --sender-email are required (pass via CLI or set SENDER_NAME/SENDER_EMAIL in .env)")
 
     if args.action == "process-one" and not args.lead_id:
         parser.error("--lead-id is required for process-one")
@@ -1462,6 +1670,8 @@ def main():
         result = action_process(worksheet, sender_info, sheet_title)
     elif args.action == "send-emails":
         result = action_send_emails(worksheet, sender_info, sheet_title, args.count)
+    elif args.action == "send-whatsapp":
+        result = action_send_whatsapp(worksheet, sender_info, sheet_title, args.count)
     elif args.action == "process-one":
         result = action_process_one(worksheet, args.lead_id, sender_info)
 

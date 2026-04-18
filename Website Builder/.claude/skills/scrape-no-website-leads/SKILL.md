@@ -16,13 +16,55 @@ Find businesses that lack a real website, verify they truly have none, enrich wi
 **Quality pipeline:** Scrape → Filter (blocklist) → Verify (domain probe) → Enrich (WebSearch) → Google Sheets
 
 ## Scripts
-- `./scripts/no_website_pipeline.py` — Google Maps pipeline: scrape → filter → verify
-- `./scripts/scrape_local_ch.py` — local.ch pipeline: scrape → filter (no verify needed)
+- `./scripts/smart_scrape.py` — **Coverage-aware auto-picker**: reads target matrix + history, picks best uncovered combo, runs scraper. Use this for systematic lead generation.
+- `./scripts/search_tracker.py` — Tracks every search (trade × city × source) with yield stats. Powers smart_scrape's prioritisation.
+- `./scripts/no_website_pipeline.py` — Google Maps pipeline: scrape → filter → verify (auto-records to tracker)
+- `./scripts/scrape_local_ch.py` — local.ch pipeline: scrape → filter (auto-records to tracker)
 - `./scripts/scrape_google_maps.py` — Google Maps scraper via Apify
 - `./scripts/filter_no_website.py` — Smart 2-layer website filter (100+ blocked domains)
 - `./scripts/verify_no_website.py` — Domain probe verification (catches false positives)
 - `./scripts/update_sheet.py` — Google Sheets sync with deduplication + contact quality filter
 - `./scripts/clean_leads.py` — Clean existing sheet: remove leads without contact info or with personal website emails
+
+## Data Files
+- `./data/target_matrix.json` — Master list of Swiss trades × cities to cover (edit to add new targets)
+- `./data/search_coverage.json` — Auto-generated history of every search with yield stats (never edit manually)
+
+## Systematic Scraping (Recommended)
+
+Use `smart_scrape.py` to systematically cover the target matrix with zero manual decision-making.
+
+```bash
+source .venv/bin/activate
+
+# Auto-pick the highest-potential uncovered combo and run it
+python3 .claude/skills/scrape-no-website-leads/scripts/smart_scrape.py next
+
+# Preview what would be picked (no scraping)
+python3 .claude/skills/scrape-no-website-leads/scripts/smart_scrape.py next --dry-run
+
+# See coverage stats + yield rates by trade and city
+python3 .claude/skills/scrape-no-website-leads/scripts/smart_scrape.py status
+
+# List top 20 pending combos
+python3 .claude/skills/scrape-no-website-leads/scripts/smart_scrape.py pending
+
+# Run a specific combo manually
+python3 .claude/skills/scrape-no-website-leads/scripts/smart_scrape.py run --trade maler --city zürich
+
+# Use Google Maps instead of local.ch
+python3 .claude/skills/scrape-no-website-leads/scripts/smart_scrape.py next --source google-maps
+```
+
+**How prioritisation works:**
+- Picks the highest-scoring uncovered (trade × city × source) combo
+- Score = city population (30%) + avg trade yield from other cities (40%) + avg city yield from other trades (30%)
+- Skips combos searched in the last 30 days (cooldown)
+- Skips combos with a documented yield < 4% (low potential)
+- As more searches complete, yield data improves the scoring accuracy
+
+**Target matrix:** `data/target_matrix.json` — 20 trades × 30 cities × 2 sources = 1,200 total combinations.
+Add new trades/cities there to expand coverage.
 
 ## Process — FOLLOW THESE STEPS EXACTLY
 
@@ -159,6 +201,28 @@ python3 .claude/skills/scrape-no-website-leads/scripts/update_sheet.py \
   --sheet-name "Maler Zürich Leads"
 ```
 
+### Step 5: Build & Deploy Draft Websites
+
+After saving leads to Google Sheets, **immediately** build and deploy all 4 draft websites for every new lead:
+
+```bash
+source .venv/bin/activate
+python3 .claude/skills/pipeline-manager/scripts/pipeline_manager.py --action process
+```
+
+This will:
+1. Read all leads with status `"new"` from the sheet
+2. Build 4 template variants (earlydog, bia, liveblocks, loveseen) for each lead
+3. Deploy each to Cloudflare Pages (~15s between deploys to avoid rate limits)
+4. Update the sheet: status → `"website_created"`, fills `draft_url_1`–`draft_url_4`
+5. Set `next_action` → `"READY TO SEND EMAIL"` (or `"READY TO CALL"` if no email found)
+
+Sender info is read automatically from `SENDER_NAME`/`SENDER_EMAIL` in `.env` — no extra args needed.
+
+**Note:** Requires Wrangler to be authenticated. If the script warns "Wrangler not authenticated", run `npx wrangler login` and re-run.
+
+After this step, report back with the draft URLs and whether each lead is ready to email or call.
+
 ### Full Example Flow
 ```
 User: "Find painters in Zürich without websites"
@@ -170,8 +234,9 @@ You do:
 3. For each business, WebSearch: "{name}" Zürich Kontakt Email Inhaber
 4. Build lead records with flatten_lead()
 5. Save to .tmp/leads_final.json
-6. Run update_sheet.py to upload to Google Sheets (auto-builds draft websites for each new lead)
-7. Report: "Found 5 verified no-website businesses, enriched contacts for 4, saved to Google Sheets: [URL]"
+6. Run update_sheet.py to upload to Google Sheets
+7. Run pipeline-manager --action process to build & deploy 4 draft websites for each new lead
+8. Report: "Found 5 verified no-website businesses, enriched contacts for 4, built drafts for 5. Ready to send email."
 ```
 
 ### Full Example Flow (local.ch)
@@ -186,7 +251,8 @@ You do:
 4. Build lead records with flatten_lead()
 5. Save to .tmp/leads_final.json
 6. Run update_sheet.py to upload to Google Sheets
-7. Report results
+7. Run pipeline-manager --action process to build & deploy 4 draft websites for each new lead
+8. Report results with draft URLs
 ```
 
 ## Pipeline Architecture
@@ -213,7 +279,7 @@ Source B: local.ch → Filter (no website field) ──────────�
 5. **Google Sheet Sync** — Appends new leads, deduplicates by lead_id, color-coded headers
 
 ### Pipeline Steps (local.ch)
-1. **local.ch Scrape** — Apify `azzouzana/local-ch-search-results-scraper-ppr`
+1. **local.ch Scrape** — Playwright (headless Chromium) visits listing + detail pages directly
 2. **Filter** — Businesses with empty website field = no website (very reliable)
 3. **WebSearch Enrichment** — Same as above
 4. **Google Sheet Sync** — Same as above
@@ -278,7 +344,7 @@ To add more domains: edit `DIRECTORY_DOMAINS` in `filter_no_website.py`.
 | Domain verification | Free (HTTP HEAD) |
 | WebSearch enrichment | Free (built-in) |
 | **Total (Google Maps)** | **~$0.01-0.02** |
-| **Total (local.ch)** | **~$0.004** |
+| **Total (local.ch)** | **Free (Playwright)** |
 
 ## Troubleshooting
 

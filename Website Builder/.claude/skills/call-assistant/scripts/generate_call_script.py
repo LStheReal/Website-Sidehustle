@@ -2,12 +2,9 @@
 """
 Generate a German phone call cheat sheet for cold outreach.
 
-Produces a structured call script with:
-- Business info card (facts at a glance)
-- Opening lines (with/without prior email)
-- Conversation flow with branches
-- Objection handling in German
-- SMS/WhatsApp template with links
+Produces a word-for-word call script designed for someone who is new to
+sales calls. Includes exact phrases, a decision tree, objection handling,
+confidence builders, and a ready-to-send WhatsApp template.
 """
 
 import argparse
@@ -15,10 +12,16 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 from execution.utils import save_intermediate
+
+# Import WhatsApp link generation
+WHATSAPP_SCRIPT = PROJECT_ROOT / ".claude" / "skills" / "whatsapp-outreach" / "scripts"
+sys.path.insert(0, str(WHATSAPP_SCRIPT))
+from send_whatsapp import format_swiss_phone, generate_whatsapp_message, generate_wa_me_link
 
 
 def generate_call_script(
@@ -30,138 +33,243 @@ def generate_call_script(
     url1: str,
     url2: str,
     url3: str,
-    sender_name: str,
+    url4: str = "",
+    sender_name: str = "",
     email_sent: bool = False,
+    whatsapp_sent: bool = False,
     address: str = "",
     rating: str = "",
     review_count: str = "",
 ) -> dict:
-    """Generate the full call cheat sheet."""
+    """Generate the full call cheat sheet with word-for-word scripts."""
 
     contact_name = owner_name if owner_name and owner_name.strip() else "den Inhaber / die Inhaberin"
-    greeting_name = owner_name if owner_name and owner_name.strip() else ""
+    greeting_name = owner_name.strip() if owner_name and owner_name.strip() else ""
+    greeting = f" {greeting_name}" if greeting_name else ""
+
+    # --- Confidence Builder ---
+    confidence = f"""
+{'='*60}
+  BEVOR SIE ANRUFEN — KURZ DURCHATMEN
+{'='*60}
+
+  Sie bieten etwas GRATIS an. Die Webseiten sind schon fertig.
+  Sie verschenken etwas Wertvolles — kein Verkaufsgespräch nötig.
+
+  Das Schlimmste, was passieren kann: "Nein danke."
+  Das ist völlig okay. Weiter zum nächsten.
+
+  Ziel des Anrufs: Nur die Links per WhatsApp schicken dürfen.
+  Mehr nicht. Kein Verkauf am Telefon.
+
+  Atmen Sie einmal tief durch. Dann wählen Sie.
+"""
 
     # --- Info Card ---
     info_card = f"""
-┌─────────────────────────────────────────────┐
-│  {business_name}
-│  {category} — {city}
-│  Tel: {phone}
-│  {f'Adresse: {address}' if address else ''}
-│  {f'Google: {rating}★ ({review_count} Bewertungen)' if rating else ''}
-│  Kontakt: {contact_name}
-│  E-Mail gesendet: {'Ja' if email_sent else 'Nein'}
-└─────────────────────────────────────────────┘"""
+{'─'*60}
+  BETRIEB: {business_name}
+  BRANCHE: {category or '(nicht bekannt)'}     ORT: {city}
+  TELEFON: {phone}
+  {f'ADRESSE: {address}' if address else ''}
+  {f'GOOGLE:  {rating} Sterne ({review_count} Bewertungen)' if rating else ''}
+  KONTAKT: {contact_name}
+  {'WhatsApp gesendet: Ja' if whatsapp_sent else ''}{'E-Mail gesendet: Ja' if email_sent else ''}
+{'─'*60}
+"""
 
-    # --- Opening ---
-    if email_sent:
+    # --- Opening (3 variants) ---
+    if whatsapp_sent:
+        opening = f"""
+ERÖFFNUNG (WhatsApp wurde gesendet):
+{'─'*45}
+
+SIE: "Grüezi{greeting}, mein Name ist {sender_name}.
+      Ich habe Ihnen vor ein paar Tagen eine WhatsApp-Nachricht
+      geschickt mit Website-Entwürfen für {business_name} —
+      haben Sie die gesehen?"
+
+      ... PAUSE — warten bis sie antworten ...
+
+  Falls JA ("Ja, habe ich gesehen"):
+  ──────────────────────────────────
+  SIE: "Super! Und — hat Ihnen eines der Designs gefallen?"
+
+    → Falls ein Design gefällt:
+      SIE: "Das freut mich! Wir können das Design genau an
+           Ihren Betrieb anpassen — Ihre Farben, Texte, Fotos.
+           Soll ich Ihnen dazu kurz eine Nachricht schicken?"
+
+    → Falls kein Design gefällt:
+      SIE: "Kein Problem! Was hätten Sie sich denn vorgestellt?
+           Wir passen das gerne komplett an."
+
+  Falls NEIN ("Nein, habe ich nicht gesehen"):
+  ─────────────────────────────────────────────
+  SIE: "Kein Problem! Ich schicke Ihnen die Links gleich nochmal.
+       Wir haben 4 verschiedene Designs erstellt, speziell für
+       {business_name}. Kostenlos und unverbindlich — schauen
+       Sie einfach mal rein, wenn Sie 2 Minuten haben."
+"""
+
+    elif email_sent:
         opening = f"""
 ERÖFFNUNG (E-Mail wurde gesendet):
-───────────────────────────────────
-"Grüezi{f' {greeting_name}' if greeting_name else ''}, mein Name ist {sender_name}.
+{'─'*45}
 
-Ich habe Ihnen vor ein paar Tagen eine E-Mail mit 3 Website-Entwürfen
-für {business_name} geschickt — haben Sie die gesehen?"
+SIE: "Grüezi{greeting}, mein Name ist {sender_name}.
+      Ich habe Ihnen vor ein paar Tagen eine E-Mail geschickt
+      mit Website-Entwürfen für {business_name} — haben Sie
+      die gesehen?"
 
-→ Falls JA:  "Super! Welches Design hat Ihnen am besten gefallen?"
-→ Falls NEIN: "Kein Problem! Darf ich Ihnen die Links kurz per
-              SMS oder WhatsApp schicken? Dauert nur 2 Sekunden."
+      ... PAUSE — warten bis sie antworten ...
+
+  Falls JA:
+  SIE: "Super! Welches Design hat Ihnen am besten gefallen?"
+
+  Falls NEIN:
+  SIE: "Kein Problem! Darf ich Ihnen die Links per WhatsApp
+       schicken? Dann sehen Sie die sofort."
 """
+
     else:
         opening = f"""
-ERÖFFNUNG (Kein E-Mail — Erstkontakt per Telefon):
-───────────────────────────────────────────────────
-"Grüezi{f' {greeting_name}' if greeting_name else ''}, mein Name ist {sender_name}.
+ERÖFFNUNG (Erstkontakt — kein WhatsApp/E-Mail vorher):
+{'─'*45}
 
-Ich habe gesehen, dass {business_name} in {city} noch keine eigene
-Website hat. Deshalb habe ich 3 Website-Entwürfe für Sie erstellt —
-komplett kostenlos und unverbindlich.
+SIE: "Grüezi{greeting}, mein Name ist {sender_name}.
+      Ich rufe an weil ich gesehen habe, dass {business_name}
+      in {city} noch keine eigene Webseite hat."
 
-Darf ich Ihnen die Links per SMS oder WhatsApp schicken,
-damit Sie sich die Designs anschauen können?"
+      ... KURZE PAUSE — lassen Sie sie reagieren ...
+
+SIE: "Deshalb habe ich mir erlaubt, 4 Website-Entwürfe
+      für Ihren Betrieb zu erstellen. Komplett kostenlos
+      und unverbindlich — darf ich Ihnen die Links per
+      WhatsApp schicken?"
 """
 
-    # --- Conversation Flow ---
-    flow = """
+    # --- Rating hook (optional) ---
+    rating_hook = ""
+    if rating and review_count:
+        rating_hook = f"""
+OPTIONAL — Wenn sich das Gespräch natürlich ergibt:
+{'─'*45}
+
+SIE: "Ich habe übrigens gesehen, dass Sie auf Google {rating}
+      Sterne haben mit {review_count} Bewertungen — Ihre Kunden
+      sind offensichtlich sehr zufrieden! Mit einer eigenen
+      Webseite könnten noch mehr Leute Sie finden."
+"""
+
+    # --- Conversation Flow (word-for-word) ---
+    flow = f"""
 GESPRÄCHSVERLAUF:
-─────────────────
-Reaktion positiv ("Ja, schicken Sie mal"):
-  → "Toll, ich schicke Ihnen gleich die 3 Links."
-  → "Schauen Sie sich die Entwürfe in Ruhe an."
-  → "Welches Design Ihnen gefällt, passen wir dann genau an."
-  → "Darf ich Sie Ende der Woche nochmal anrufen?"
+{'─'*45}
 
-Reaktion neutral ("Ich habe eigentlich keine Zeit"):
-  → "Verstehe ich total. Deshalb habe ich die Website schon
-     fertig erstellt — Sie müssen nichts machen."
-  → "Schauen Sie einfach kurz rein, wenn Sie 2 Minuten haben."
-  → SMS/WhatsApp mit Links schicken.
+Reaktion POSITIV ("Ja, schicken Sie mal"):
+  SIE: "Toll! Ich schicke Ihnen gleich 4 verschiedene Designs per
+       WhatsApp. Schauen Sie sich die in Ruhe an — es gibt Klassisch,
+       Modern, Frisch und Elegant. Welches Ihnen gefällt, können wir
+       dann genau anpassen."
+  SIE: "Passt es, wenn ich Ende der Woche nochmal kurz anrufe?"
 
-Reaktion negativ ("Kein Interesse"):
-  → "Kein Problem! Die Entwürfe bleiben noch eine Weile online,
-     falls Sie es sich anders überlegen."
-  → "Darf ich fragen — haben Sie eine Website bei einem
-     anderen Anbieter geplant?"
-  → Freundlich verabschieden, nicht drängen.
+Reaktion NEUTRAL ("Ich habe eigentlich keine Zeit"):
+  SIE: "Verstehe ich total. Deshalb habe ich die Webseiten schon
+       fertig erstellt — Sie müssen gar nichts machen. Ich schicke
+       Ihnen einfach die Links per WhatsApp, dann können Sie
+       reinschauen, wenn Sie mal 2 Minuten haben."
+
+Reaktion NEGATIV ("Kein Interesse"):
+  SIE: "Kein Problem! Die Entwürfe bleiben noch ein paar Wochen
+       online, falls Sie es sich anders überlegen. Ich wünsche
+       Ihnen einen schönen Tag!"
+  → Freundlich verabschieden. NICHT drängen.
 """
 
-    # --- Objection Handling ---
-    objections = """
-EINWÄNDE BEHANDELN:
-───────────────────
-"Was kostet das?"
-  → "Die Entwürfe sind kostenlos. Wenn Sie sich für ein Design
-     entscheiden, kostet die fertige Website CHF [PREIS] einmalig
-     plus CHF [PREIS]/Jahr für Hosting und Domain."
+    # --- Objection Handling (word-for-word) ---
+    cat_text = category or "Betrieb"
+    objections = f"""
+EINWÄNDE — Was sie sagen könnten:
+{'─'*45}
 
-"Ich brauche keine Website"
-  → "Viele Ihrer Kunden suchen heute online nach einem
-     {category}-Betrieb in {city}. Ohne Website finden die
-     Sie leider nicht — aber Ihre Konkurrenz schon."
+"WAS KOSTET DAS?"
+  SIE: "Die Entwürfe sind komplett kostenlos. Wenn Sie sich für
+       ein Design entscheiden und wir es fertigstellen, kostet
+       das einmalig ab CHF 490. Aber schauen Sie sich erstmal
+       die Entwürfe an — ganz unverbindlich."
 
-"Ich habe schon jemanden"
-  → "Super, dann sind Sie gut aufgestellt! Falls es nicht
-     klappt, melden Sie sich gerne bei mir."
+"ICH BRAUCHE KEINE WEBSITE"
+  SIE: "Verstehe ich. Aber wussten Sie, dass heute über 80% der
+       Kunden online nach einem {cat_text} in {city} suchen?
+       Ohne Webseite finden die leider nur Ihre Konkurrenz.
+       Die Entwürfe sind kostenlos — schauen Sie einfach mal rein."
 
-"Schicken Sie mir eine E-Mail"
-  → "Mache ich gerne! An welche Adresse darf ich schreiben?"
-  → (E-Mail-Adresse notieren → cold-email Skill nutzen)
+"ICH HABE SCHON JEMANDEN"
+  SIE: "Super, dann sind Sie gut aufgestellt! Falls es mal nicht
+       klappt, denken Sie an uns. Ich wünsche Ihnen alles Gute!"
+  → Freundlich verabschieden.
 
-"Ich muss das mit meinem Partner besprechen"
-  → "Natürlich! Ich schicke Ihnen die Links, dann können
-     Sie die zusammen anschauen. Passt es, wenn ich
-     nächste Woche nochmal anrufe?"
+"SCHICKEN SIE MIR EINE E-MAIL"
+  SIE: "Mache ich gerne! An welche E-Mail-Adresse darf ich
+       schreiben?"
+  → E-Mail-Adresse SOFORT notieren!
+  → Im Google Sheet eintragen (owner_email).
+
+"ICH MUSS DAS MIT MEINEM PARTNER BESPRECHEN"
+  SIE: "Natürlich! Ich schicke Ihnen die Links per WhatsApp,
+       dann können Sie die zusammen anschauen. Passt es, wenn
+       ich nächste Woche nochmal kurz anrufe?"
 """
 
-    # --- SMS Template ---
-    sms_template = f"""
-SMS / WHATSAPP NACHRICHT (zum Kopieren):
-────────────────────────────────────────
-Grüezi{f' {greeting_name}' if greeting_name else ''}, hier ist {sender_name}. Wie besprochen, hier die 3 Website-Entwürfe für {business_name}:
+    # --- WhatsApp template + wa.me link ---
+    urls = [u for u in [url1, url2, url3, url4] if u]
+    while len(urls) < 4:
+        urls.append(urls[-1] if urls else "")
 
-1) Klassisch: {url1}
-2) Modern: {url2}
-3) Frisch: {url3}
+    formatted_phone = format_swiss_phone(phone)
+    wa_message = generate_whatsapp_message(
+        business_name=business_name,
+        owner_name=owner_name,
+        url1=urls[0],
+        url2=urls[1],
+        url3=urls[2],
+        url4=urls[3],
+        sender_name=sender_name,
+        variant="post_call",
+    )
 
-Welches Design gefällt Ihnen? Einfach antworten oder anrufen!
+    wa_link = generate_wa_me_link(formatted_phone, wa_message) if formatted_phone else "(Telefonnummer nicht erkannt)"
+
+    whatsapp_section = f"""
+NACH DEM ANRUF — WHATSAPP SENDEN:
+{'─'*45}
+
+Klicken Sie diesen Link — WhatsApp öffnet sich mit der Nachricht:
+
+  {wa_link}
+
+Oder Text zum Kopieren:
+{wa_message}
 """
 
     # --- Close ---
-    close = """
+    close = f"""
 ABSCHLUSS:
-──────────
-Immer freundlich abschliessen:
-  → "Vielen Dank für Ihre Zeit!"
-  → "Ich wünsche Ihnen einen schönen Tag."
-  → "Falls Fragen auftauchen, rufen Sie mich jederzeit an."
+{'─'*45}
+
+Immer freundlich:
+  SIE: "Vielen Dank für Ihre Zeit!"
+  SIE: "Ich wünsche Ihnen einen schönen Tag."
+  SIE: "Falls Fragen auftauchen — meine Nummer haben Sie ja."
 
 NACH DEM ANRUF:
-  → SMS/WhatsApp mit Links schicken (falls vereinbart)
-  → Google Sheet updaten: status, notes
-  → Nächsten Anruf / Follow-up planen
+  1. WhatsApp mit Links senden (Link oben klicken)
+  2. Google Sheet aktualisieren: Status + Notizen
+  3. Nächsten Anruf planen (oder nächsten Lead)
 """
 
-    full_script = info_card + opening + flow + objections.replace("{category}", category).replace("{city}", city) + sms_template + close
+    full_script = confidence + info_card + opening + rating_hook + flow + objections + whatsapp_section + close
 
     return {
         "generated_at": datetime.now().isoformat(),
@@ -176,25 +284,29 @@ NACH DEM ANRUF:
             "review_count": review_count,
         },
         "email_sent": email_sent,
+        "whatsapp_sent": whatsapp_sent,
         "sender_name": sender_name,
-        "website_urls": [url1, url2, url3],
+        "website_urls": urls,
+        "wa_me_link": wa_link,
         "script_text": full_script,
-        "sms_template": sms_template.strip(),
+        "sms_template": wa_message,
     }
 
 
 def main():
     parser = argparse.ArgumentParser(description="Generate a call script for cold outreach")
     parser.add_argument("--business-name", required=True)
-    parser.add_argument("--category", required=True)
+    parser.add_argument("--category", default="")
     parser.add_argument("--city", required=True)
     parser.add_argument("--phone", required=True)
     parser.add_argument("--owner-name", default="")
     parser.add_argument("--website-url-1", required=True)
     parser.add_argument("--website-url-2", required=True)
     parser.add_argument("--website-url-3", required=True)
+    parser.add_argument("--website-url-4", default="")
     parser.add_argument("--sender-name", required=True)
-    parser.add_argument("--email-sent", action="store_true", help="Set if cold email was already sent")
+    parser.add_argument("--email-sent", action="store_true", help="Set if email was already sent")
+    parser.add_argument("--whatsapp-sent", action="store_true", help="Set if WhatsApp was already sent")
     parser.add_argument("--address", default="")
     parser.add_argument("--rating", default="")
     parser.add_argument("--review-count", default="")
@@ -209,17 +321,17 @@ def main():
         url1=args.website_url_1,
         url2=args.website_url_2,
         url3=args.website_url_3,
+        url4=args.website_url_4,
         sender_name=args.sender_name,
         email_sent=args.email_sent,
+        whatsapp_sent=args.whatsapp_sent,
         address=args.address,
         rating=args.rating,
         review_count=args.review_count,
     )
 
-    # Print the script
     print(result["script_text"])
 
-    # Save to .tmp
     output_path = save_intermediate(result, "call_script")
     print(f"\nSaved to: {output_path}")
 

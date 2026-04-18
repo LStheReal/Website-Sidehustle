@@ -231,6 +231,17 @@ def run_scrape_and_filter(
     output_file = save_intermediate(verified, "verified_no_website")
     results["output_file"] = output_file
 
+    # Record to search coverage tracker (non-fatal if it fails)
+    try:
+        from search_tracker import auto_record_google_maps
+        auto_record_google_maps(
+            search_query=search_query,
+            businesses_checked=results["businesses_found"],
+            no_website_count=results["verified_count"],
+        )
+    except Exception:
+        pass  # Tracker is non-critical
+
     # =========================================================================
     # SUMMARY
     # =========================================================================

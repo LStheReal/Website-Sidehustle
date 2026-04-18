@@ -1,0 +1,6 @@
+name = "meinekmu"
+pages_build_output_dir = "cf-dashboard"
+
+[[kv_namespaces]]
+binding = "DRAFTS_KV"
+id = "597af0d3e26e44aa80580432d3218d29"

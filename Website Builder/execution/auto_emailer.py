@@ -79,6 +79,8 @@ COL = {
     "draft_url_4": 38,
     "next_action": 40,
     "next_action_date": 41,
+    "whatsapp_sent_date": 43,
+    "whatsapp_status": 44,
 }
 
 SENDER_NAME = os.environ.get("SENDER_NAME", "Louise Schuele")
@@ -185,8 +187,48 @@ def process_lead(lead: dict, row_idx_1based: int, now: datetime, dry_run: bool) 
     status = lead["status"].lower()
     email_sent_date = lead["email_sent_date"]
 
-    if status not in ("email_sent", "followup_sent"):
+    if status not in ("email_sent", "followup_sent", "whatsapp_sent"):
         return {"action": "skip", "lead_id": lead_id, "reason": f"status={status!r}"}
+
+    # For whatsapp_sent leads: use whatsapp_sent_date, route to email follow-up at Day 7
+    if status == "whatsapp_sent":
+        wa_date_str = lead.get("whatsapp_sent_date", "")
+        if not wa_date_str:
+            return {"action": "skip", "lead_id": lead_id, "reason": "no whatsapp_sent_date"}
+        try:
+            wa_sent = datetime.strptime(wa_date_str, "%Y-%m-%d")
+        except ValueError:
+            return {"action": "skip", "lead_id": lead_id, "reason": "bad wa date"}
+        wa_days = (now - wa_sent).days
+
+        recipient = pick_recipient(lead)
+
+        if wa_days >= 14 and recipient:
+            return _send_and_update("day14", lead, row_idx_1based, recipient, wa_days, dry_run)
+        elif wa_days >= 7 and recipient:
+            has_drafts = all(lead.get(f"draft_url_{i}") for i in (1, 2, 3, 4))
+            if has_drafts:
+                return _send_and_update("day7", lead, row_idx_1based, recipient, wa_days, dry_run)
+            else:
+                return {"action": "skip", "lead_id": lead_id, "reason": "missing drafts for Day 7"}
+        elif wa_days >= 3:
+            phone = lead.get("owner_phone") or lead.get("owner_email") or "(no phone)"
+            log.info("Call needed (post-WhatsApp)",
+                     lead_id=lead_id, business=business, days_since=wa_days)
+            updates = [
+                _cell_update(row_idx_1based, COL["next_action"],
+                             f"ANRUFEN ({wa_days}d seit WhatsApp)"),
+                _cell_update(row_idx_1based, COL["next_action_date"],
+                             now.strftime("%Y-%m-%d")),
+            ]
+            return {
+                "action": "call_needed",
+                "lead_id": lead_id,
+                "business": business,
+                "days_since": wa_days,
+                "updates": updates,
+            }
+        return {"action": "skip", "lead_id": lead_id, "reason": f"wa_days={wa_days} (<3)"}
 
     if not email_sent_date:
         return {"action": "skip", "lead_id": lead_id, "reason": "no email_sent_date"}

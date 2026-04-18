@@ -62,7 +62,8 @@
         chatHistory: [],
         currentEditHtml: '',
         htmlUndoStack: [],
-        lastUploadedImageUrl: null,
+        htmlRedoStack: [],
+        // lastUploadedImageUrl removed — images now converted client-side via FileReader
         chatPanelOpen: false,
         generationPollTimer: null,
         hasExistingFormData: false,
@@ -115,7 +116,19 @@
         document.getElementById('leadForm').addEventListener('submit', async function (e) {
             e.preventDefault();
             if (await validateAndFetchLead()) {
+                // Clear any previous no-code session
+                try {
+                    sessionStorage.removeItem('db_nocode_leadId');
+                    sessionStorage.removeItem('db_nocode_step');
+                    sessionStorage.removeItem('db_nocode_template');
+                } catch(e) {}
                 state.isNoCode = false;
+                state.template = null;
+                state.chatHistory = [];
+                state.currentEditHtml = '';
+                state.htmlUndoStack = [];
+                state.htmlRedoStack = [];
+                highestStepReached = 1;
                 handlePostLogin();
             }
         });
@@ -124,7 +137,31 @@
         document.getElementById('emailForm').addEventListener('submit', async function (e) {
             e.preventDefault();
             if (await validateAndRegisterEmail()) {
+                // Clear any previous session — always start fresh
+                try {
+                    sessionStorage.removeItem('db_nocode_leadId');
+                    sessionStorage.removeItem('db_nocode_step');
+                    sessionStorage.removeItem('db_nocode_template');
+                    localStorage.removeItem('db_leadId');
+                    localStorage.removeItem('db_step');
+                    localStorage.removeItem('db_template');
+                } catch(e) {}
                 state.isNoCode = true;
+                state.template = null;
+                state.chatHistory = [];
+                state.currentEditHtml = '';
+                state.htmlUndoStack = [];
+                state.htmlRedoStack = [];
+                state.hasExistingFormData = false;
+                state.formData = { business_name: '', description: '', services: '', strengths: '', phone: '', address: '' };
+                state.customizations = { description: '', values: '', phone: '', address: '' };
+                state.domain = null;
+                state.domainSuggestions = [];
+                state.logoFile = null;
+                state.imageFiles = [];
+                state.generatedUrls = {};
+                state.generationStatus = {};
+                highestStepReached = 1;
                 try {
                     sessionStorage.setItem('db_nocode_leadId', state.leadId);
                     sessionStorage.setItem('db_nocode_step', '2');
@@ -240,18 +277,25 @@
             state.leadData = data;
             state.isNoCode = cachedIsNoCode;
 
+            // Restore template from storage (set when user clicks a template card)
+            try {
+                var storedTpl = cachedIsNoCode
+                    ? sessionStorage.getItem('db_nocode_template')
+                    : localStorage.getItem('db_template');
+                if (storedTpl && TEMPLATE_CONFIG && TEMPLATE_CONFIG[storedTpl]) state.template = storedTpl;
+            } catch(e) {}
+
             if (data.domains && data.domains.length) {
                 state.domainSuggestions = data.domains;
             }
 
-            handlePostLogin();
+            handlePostLogin(cachedStep >= 4);
 
-            // Navigate to the cached step directly — no cascading timeouts
+            // Navigate to the cached step directly — prepare all steps, then navigate once
             if (cachedStep >= 4 && (state.leadData.chosen_template || state.template)) {
                 var tpl = state.template || state.leadData.chosen_template;
                 state.template = tpl;
                 initChatEditor();
-                goToStep(4);
 
                 if (cachedStep >= 5) {
                     if (!state.domainSuggestions.length) {
@@ -261,13 +305,11 @@
                     } else {
                         renderDomainCards();
                     }
-                    goToStep(5);
-
                     if (cachedStep >= 6) {
                         renderReview();
-                        goToStep(6);
                     }
                 }
+                goToStep(Math.min(cachedStep, 6));
             }
         } catch(e) {
             // Lead not found or network error — clear stale cache, stay on step 1
@@ -275,9 +317,11 @@
                 if (cachedIsNoCode) {
                     sessionStorage.removeItem('db_nocode_leadId');
                     sessionStorage.removeItem('db_nocode_step');
+                    sessionStorage.removeItem('db_nocode_template');
                 } else {
                     localStorage.removeItem('db_leadId');
                     localStorage.removeItem('db_step');
+                    localStorage.removeItem('db_template');
                 }
             } catch(e2) {}
         } finally {
@@ -289,7 +333,7 @@
     }
 
     /* ---------- Post-login routing ---------- */
-    function handlePostLogin() {
+    function handlePostLogin(suppressNav) {
         // Persist session for reload recovery
         try {
             if (state.isNoCode) {
@@ -331,9 +375,7 @@
         }
 
         if (state.hasExistingFormData) {
-            // Returning user — skip to Design step
             initTemplateStep();
-            goToStep(3);
 
             // Check if generation is still running
             var hasAllDone = TEMPLATE_KEYS.every(function (k) {
@@ -342,10 +384,22 @@
             if (!hasAllDone && Object.keys(state.generationStatus).length > 0) {
                 startGenerationPolling();
             }
+
+            // Returning user with chosen template + generated URLs → go straight to editor
+            var chosenTpl = d.chosen_template || state.template;
+            var hasGeneratedUrls = Object.keys(state.generatedUrls).length > 0;
+            if (!suppressNav && chosenTpl && hasGeneratedUrls) {
+                state.template = chosenTpl;
+                highestStepReached = Math.max(highestStepReached, 4);
+                initChatEditor();
+                goToStep(4);
+            } else if (!suppressNav) {
+                goToStep(3);
+            }
         } else {
             // New code user — go to info form
             renderInfoForm();
-            goToStep(2);
+            if (!suppressNav) goToStep(2);
         }
     }
 
@@ -708,6 +762,15 @@
                 iframe.src = fallbackPreviewUrls[tpl] || ('templates/' + tpl + '/index.html');
             }
         });
+
+        // Pre-select previously chosen template (restores visual state after reload)
+        if (state.template) {
+            document.querySelectorAll('.db-tpl-card').forEach(function(c) {
+                c.classList.toggle('selected', c.dataset.tpl === state.template);
+            });
+            var nextBtn = document.getElementById('step3NextBtn');
+            if (nextBtn) nextBtn.disabled = false;
+        }
     }
 
     function startGenerationPolling() {
@@ -753,12 +816,40 @@
             if (allDone) stopGenerationPolling();
         } catch (e) {
             console.warn('Poll error:', e);
+            // Stop polling if lead not found (404) — prevents infinite error loop
+            if (e && e.message && (e.message.indexOf('nicht gefunden') !== -1 || e.message.indexOf('not found') !== -1)) {
+                console.warn('Lead not found, stopping poll.');
+                stopGenerationPolling();
+            }
         }
     }
 
     function selectTemplate(tplKey) {
         if (!TEMPLATE_CONFIG[tplKey]) return;
+
+        // Switching to a different template: save the current editor state under the old
+        // template's cache key, then clear in-memory state so initChatEditor correctly
+        // loads (or generates fresh) the newly-selected template's content.
+        if (state.template && state.template !== tplKey) {
+            if (state.currentEditHtml) cacheEditorState();
+            state.currentEditHtml = '';
+            state.chatHistory = [];
+            state.htmlUndoStack = [];
+            state.htmlRedoStack = [];
+            // Invalidate any in-flight async editor loads for the old template
+            _editorInitId++;
+            // Cancel pending draft save (it would fire with stale state)
+            if (_draftSaveTimer) { clearTimeout(_draftSaveTimer); _draftSaveTimer = null; }
+        }
+
         state.template = tplKey;
+
+        try {
+            if (state.leadId) {
+                if (state.isNoCode) sessionStorage.setItem('db_nocode_template', tplKey);
+                else localStorage.setItem('db_template', tplKey);
+            }
+        } catch(e) {}
 
         document.querySelectorAll('.db-tpl-card').forEach(function (c) {
             c.classList.toggle('selected', c.dataset.tpl === tplKey);
@@ -815,6 +906,10 @@
 
     // ── Editor state caching (sessionStorage = survives reload, Drive = survives tab close) ──
 
+    // Guard: incremented every time initChatEditor() starts or the template changes.
+    // Async callbacks capture this value and bail if it has changed since they started.
+    var _editorInitId = 0;
+
     function editorCacheKey(leadId, template) {
         return 'mku_html_' + leadId + '_' + template;
     }
@@ -842,14 +937,16 @@
     function getCachedHtml() {
         if (!state.leadId || !state.template) return null;
         var key = editorCacheKey(state.leadId, state.template);
-        return sessionStorage.getItem(key) || _memHtmlCache[key] || null;
+        // Prefer in-memory (always available) over sessionStorage (may fail with large base64 images)
+        return _memHtmlCache[key] || sessionStorage.getItem(key) || null;
     }
     function getCachedChat() {
         if (!state.leadId || !state.template) return null;
         var key = chatCacheKey(state.leadId, state.template);
+        if (_memChatCache[key]) return _memChatCache[key];
         try {
-            return JSON.parse(sessionStorage.getItem(key) || 'null') || _memChatCache[key] || null;
-        } catch { return _memChatCache[key] || null; }
+            return JSON.parse(sessionStorage.getItem(key) || 'null') || null;
+        } catch { return null; }
     }
 
     // Debounced Drive save — fires 3s after last edit (no redeploy, fire-and-forget)
@@ -895,6 +992,7 @@
     // POST preview with images, text, and logo — always sends all form data
     async function loadPreviewWithImages() {
         var editorIframe = document.getElementById('editorIframe');
+        var myInitId = _editorInitId; // guard against stale callbacks
         try {
             var fd = new FormData();
             fd.append('lead_id', state.leadId);
@@ -904,12 +1002,16 @@
             fd.append('strengths', state.customizations.strengths || '');
             if (state.customizations.phone) fd.append('phone', state.customizations.phone);
             if (state.customizations.address) fd.append('address', state.customizations.address);
+            var _previewEmail = (state.leadData && (state.leadData.owner_email || state.leadData.emails)) || '';
+            if (_previewEmail) fd.append('email', _previewEmail);
             if (state.logoFile) fd.append('logo', state.logoFile);
             state.imageFiles.forEach(function (f) { fd.append('images', f); });
 
             var resp = await fetch('/api/preview-with-images', { method: 'POST', body: fd });
+            if (myInitId !== _editorInitId) return;
             if (resp.ok) {
                 var html = await resp.text();
+                if (myInitId !== _editorInitId) return;
                 if (html && html.length > 100) {
                     state.currentEditHtml = html;
                     cacheEditorState();   // save to sessionStorage (images included)
@@ -920,8 +1022,10 @@
                 }
             }
         } catch (e) {
+            if (myInitId !== _editorInitId) return;
             console.warn('Preview with images failed:', e);
         }
+        if (myInitId !== _editorInitId) return;
         // Fallback to GET preview with query params
         var params = new URLSearchParams({
             description: state.customizations.description || '',
@@ -949,6 +1053,7 @@
         var editorChat = document.getElementById('editorChat');
         var chatToggle = document.getElementById('chatToggle');
         var navBtns = document.querySelector('#step-4 .db-nav-btns');
+        var myInitId = _editorInitId; // guard against stale callbacks
 
         editorLoading.style.display = '';
         if (editorChat) editorChat.style.display = 'none';
@@ -970,8 +1075,10 @@
             state.imageFiles.forEach(function(f) { fd.append('images', f); });
 
             var resp = await fetch('/api/preview-with-images', { method: 'POST', body: fd });
+            if (myInitId !== _editorInitId) return;
             if (!resp.ok) throw new Error('Generation failed');
             var newHtml = await resp.text();
+            if (myInitId !== _editorInitId) return;
             if (!newHtml || newHtml.length < 100) throw new Error('Empty HTML');
 
             // Step 2: If there were previous chat edits, replay them on the new HTML
@@ -1003,6 +1110,7 @@
                 }
             }
 
+            if (myInitId !== _editorInitId) return;
             state.currentEditHtml = newHtml;
             state.chatHistory = oldChatHistory || [];
             // Add a note that website was regenerated
@@ -1012,6 +1120,7 @@
             editorIframe.srcdoc = injectPreviewLinkGuard(newHtml);
             showEditorAfterLoad();
         } catch(e) {
+            if (myInitId !== _editorInitId) return;
             console.error('Regenerate+replay failed:', e);
             // Fallback: simple regeneration
             clearEditorCache();
@@ -1026,8 +1135,13 @@
         var chatToggle = document.getElementById('chatToggle');
         var navBtns = document.querySelector('#step-4 .db-nav-btns');
 
+        // Capture a generation ID — all async callbacks below check this so that
+        // stale responses from a previous template don't overwrite the current one.
+        var myInitId = ++_editorInitId;
+
         state.htmlUndoStack = [];
-        state.lastUploadedImageUrl = null;
+        state.htmlRedoStack = [];
+        // (image state cleared via pendingChatImage = null)
 
         // Pre-fetch domains in background so "Continue" is instant
         if (!state.domainSuggestions || !state.domainSuggestions.length) {
@@ -1067,15 +1181,15 @@
             state.currentEditHtml = cachedHtml;
             state.chatHistory = cachedChat || [];
             if (!state.chatHistory.length) {
-                state.chatHistory.push({ role: 'assistant', content: 'Hallo! Sag mir einfach, was du an deiner Website \u00e4ndern m\u00f6chtest \u2014 ich setze es sofort um. Wenn du etwas Spezifischeres brauchst oder einen pers\u00f6nlichen Beratungstermin m\u00f6chtest, schreib uns einfach eine E-Mail unter info@meine-kmu.ch.' });
+                state.chatHistory.push({ role: 'assistant', content: 'So benutzt du den Chat-Editor:\n\n\u2022 Beschreibe genau, was du \u00e4ndern m\u00f6chtest \u2013 z.B. \u00abÄndere die \u00dcberschrift zu\u2026\u00bb oder \u00abEntferne den Kontaktbereich\u00bb.\n\u2022 Du kannst Texte, Farben, Bilder und ganze Abschnitte \u00e4ndern oder entfernen.\n\u2022 Mit den Pfeil-Schaltfl\u00e4chen (\u21b6 \u21b7) kannst du \u00c4nderungen r\u00fcckg\u00e4ngig machen oder wiederherstellen.\n\u2022 Mit dem Kamera-Symbol \ud83d\udcf7 kannst du eigene Bilder hochladen und einsetzen lassen.\n\nEinfach losschreiben!', uiOnly: true });
             }
             renderChatMessages();
-            editorLoading.style.display = '';
-            if (editorChat) editorChat.style.display = 'none';
-            if (chatToggle) chatToggle.style.display = 'none';
-            if (navBtns) navBtns.style.display = 'none';
+            // Cached HTML is local — render immediately, no loading screen needed
+            editorLoading.style.display = 'none';
+            if (editorChat) editorChat.style.display = '';
+            if (chatToggle) chatToggle.style.display = '';
+            if (navBtns) navBtns.style.display = '';
             editorIframe.srcdoc = injectPreviewLinkGuard(cachedHtml);
-            editorIframe.onload = function() { showEditorAfterLoad(); };
             return;
         }
 
@@ -1083,7 +1197,8 @@
         state.currentEditHtml = '';
         state.chatHistory.push({
             role: 'assistant',
-            content: 'Hallo! Sag mir einfach, was du an deiner Website \u00e4ndern m\u00f6chtest \u2014 ich setze es sofort um. Wenn du etwas Spezifischeres brauchst oder einen pers\u00f6nlichen Beratungstermin m\u00f6chtest, schreib uns einfach eine E-Mail unter info@meine-kmu.ch.',
+            content: 'So benutzt du den Chat-Editor:\n\n\u2022 Beschreibe genau, was du \u00e4ndern m\u00f6chtest \u2013 z.B. \u00abÄndere die \u00dcberschrift zu\u2026\u00bb oder \u00abEntferne den Kontaktbereich\u00bb.\n\u2022 Du kannst Texte, Farben, Bilder und ganze Abschnitte \u00e4ndern oder entfernen.\n\u2022 Mit den Pfeil-Schaltfl\u00e4chen (\u21b6 \u21b7) kannst du \u00c4nderungen r\u00fcckg\u00e4ngig machen oder wiederherstellen.\n\u2022 Mit dem Kamera-Symbol \ud83d\udcf7 kannst du eigene Bilder hochladen und einsetzen lassen.\n\nEinfach losschreiben!',
+            uiOnly: true,
         });
         renderChatMessages();
 
@@ -1098,6 +1213,7 @@
         var driveId = state.leadData && state.leadData['html_' + state.template + '_drive_id'];
         if (driveId) {
             apiGet('/lead/' + state.leadId + '/saved-html/' + state.template).then(function(r) {
+                if (myInitId !== _editorInitId) return; // template changed, discard
                 if (r && r.html && r.html.length > 100) {
                     state.currentEditHtml = r.html;
                     editorIframe.srcdoc = injectPreviewLinkGuard(r.html);
@@ -1109,6 +1225,7 @@
                     if (!state.generationPollTimer) startGenerationPolling();
                 }
             }).catch(function() {
+                if (myInitId !== _editorInitId) return;
                 loadPreviewWithImages();
                 if (!state.generationPollTimer) startGenerationPolling();
             });
@@ -1141,12 +1258,15 @@
 
     async function loadEditorWithHtml(url, fallbackUrl) {
         var editorIframe = document.getElementById('editorIframe');
+        var myInitId = _editorInitId; // guard against stale callbacks
 
         // Try fetching the primary URL
         try {
             var resp = await fetch(url);
+            if (myInitId !== _editorInitId) return;
             if (resp.ok) {
                 var html = await resp.text();
+                if (myInitId !== _editorInitId) return;
                 if (html && html.length > 100) {
                     state.currentEditHtml = html;
                     cacheEditorState();
@@ -1156,6 +1276,7 @@
                 }
             }
         } catch (e) {
+            if (myInitId !== _editorInitId) return;
             console.warn('Primary fetch failed:', e);
         }
 
@@ -1163,6 +1284,7 @@
         if (url.includes('.pages.dev')) {
             try {
                 var proxyResp = await apiPost('/fetch-url', { url: url });
+                if (myInitId !== _editorInitId) return;
                 if (proxyResp && proxyResp.html && proxyResp.html.length > 100) {
                     state.currentEditHtml = proxyResp.html;
                     cacheEditorState();
@@ -1170,15 +1292,20 @@
                     showEditorAfterLoad();
                     return;
                 }
-            } catch (e) { console.warn('Proxy fetch failed:', e); }
+            } catch (e) {
+                if (myInitId !== _editorInitId) return;
+                console.warn('Proxy fetch failed:', e);
+            }
         }
 
         // Try fallback URL (same-origin preview)
         if (fallbackUrl) {
             try {
                 var fbResp = await fetch(fallbackUrl);
+                if (myInitId !== _editorInitId) return;
                 if (fbResp.ok) {
                     var fbHtml = await fbResp.text();
+                    if (myInitId !== _editorInitId) return;
                     if (fbHtml && fbHtml.length > 100) {
                         state.currentEditHtml = fbHtml;
                         cacheEditorState();
@@ -1190,6 +1317,7 @@
             } catch (e) { console.warn('Fallback fetch failed:', e); }
         }
 
+        if (myInitId !== _editorInitId) return;
         // Last resort: load URL directly in iframe
         console.warn('All fetch methods failed, loading URL directly in iframe');
         editorIframe.src = url;
@@ -1227,35 +1355,61 @@
     async function sendChatMessage() {
         var input = document.getElementById('chatInput');
         var message = input.value.trim();
-        if (!message) return;
+        var hasPendingImage = !!state.pendingChatImage;
+
+        // Need either a message or an attached image
+        if (!message && !hasPendingImage) return;
         if (!state.currentEditHtml) return;
 
-        // Push current HTML to undo stack before the edit
+        // Push current HTML to undo stack before the edit; new edit clears redo history
         state.htmlUndoStack.push(state.currentEditHtml);
         if (state.htmlUndoStack.length > 20) state.htmlUndoStack.shift();
+        state.htmlRedoStack = [];
         updateUndoButton();
+        updateRedoButton();
 
-        state.chatHistory.push({ role: 'user', content: message });
+        // Build display message
+        var displayMessage = '';
+        if (hasPendingImage) displayMessage += '\ud83d\udcf7 ' + state.pendingChatImage.name;
+        if (hasPendingImage && message) displayMessage += '\n';
+        if (message) displayMessage += message;
+
+        state.chatHistory.push({ role: 'user', content: displayMessage });
         renderChatMessages();
         input.value = '';
+
+        // Remove image preview
+        var imgPreview = document.getElementById('chatImagePreview');
+        if (imgPreview) imgPreview.remove();
+        input.placeholder = 'z.B. \u00c4ndere die \u00dcberschrift zu\u2026';
 
         var sendBtn = document.getElementById('chatSendBtn');
         if (sendBtn) sendBtn.disabled = true;
 
         showTypingIndicator();
 
-        // Append uploaded image URL if available
-        var messageToSend = message;
-        if (state.lastUploadedImageUrl) {
-            messageToSend += '\n\n[Hochgeladenes Bild URL: ' + state.lastUploadedImageUrl + ']';
-            state.lastUploadedImageUrl = null;
+        // Convert pending image to data URL client-side (no server round-trip needed)
+        var messageToSend = message || 'Verwende dieses Bild auf meiner Website.';
+        var newImageDataUrl = null;
+        if (hasPendingImage) {
+            try {
+                newImageDataUrl = await new Promise(function(resolve, reject) {
+                    var reader = new FileReader();
+                    reader.onload = function() { resolve(reader.result); };
+                    reader.onerror = function() { reject(reader.error); };
+                    reader.readAsDataURL(state.pendingChatImage);
+                });
+                messageToSend += '\n\n[Der Kunde hat ein neues Bild hochgeladen. Verwende src="[NEUES_BILD]" im passenden img-Tag. Ersetze das Bild das am besten zum Kontext der Nachricht passt, oder das Hero-Bild wenn unklar.]';
+            } catch(imgErr) {
+                console.warn('Image read failed:', imgErr);
+            }
+            state.pendingChatImage = null;
         }
 
         try {
             // Strip large blobs before sending to AI to stay within rate limits.
             // We store them and re-inject after getting the response.
             var dataUrls = [];
-            var styleBlocks = [];
             var scriptBlocks = [];
 
             var htmlToSend = state.currentEditHtml
@@ -1268,11 +1422,7 @@
                     var idx = dataUrls.length; dataUrls.push(url);
                     return 'url([BILD_' + idx + '])';
                 })
-                // 2. Strip <style> blocks (CSS is ~10-20k tokens, AI doesn't need it)
-                .replace(/<style[\s\S]*?<\/style>/gi, function(block) {
-                    var idx = styleBlocks.length; styleBlocks.push(block);
-                    return '<!-- STYLE_' + idx + ' -->';
-                })
+                // 2. Keep <style> blocks — AI needs CSS to match design when adding sections
                 // 3. Strip <script> blocks
                 .replace(/<script[\s\S]*?<\/script>/gi, function(block) {
                     var idx = scriptBlocks.length; scriptBlocks.push(block);
@@ -1283,7 +1433,7 @@
                 html: htmlToSend,
                 message: messageToSend,
                 template_key: state.template,
-                history: state.chatHistory.slice(0, -1),
+                history: state.chatHistory.filter(function(m) { return !m.uiOnly; }).slice(0, -1),
                 business_context: {
                     business_name: state.formData.business_name || (state.leadData && state.leadData.business_name) || '',
                     description: state.formData.description || '',
@@ -1304,23 +1454,37 @@
                     .replace(/url\(\[BILD_(\d+)\]\)/g, function(_, i) {
                         return 'url(' + (dataUrls[parseInt(i)] || '') + ')';
                     })
-                    .replace(/<!-- STYLE_(\d+) -->/g, function(_, i) {
-                        return styleBlocks[parseInt(i)] || '';
-                    })
                     .replace(/<!-- SCRIPT_(\d+) -->/g, function(_, i) {
                         return scriptBlocks[parseInt(i)] || '';
                     });
+                // Replace new image placeholder with actual data URL
+                if (newImageDataUrl) {
+                    if (restoredHtml.indexOf('[NEUES_BILD]') !== -1) {
+                        restoredHtml = restoredHtml.replace(/\[NEUES_BILD\]/g, newImageDataUrl);
+                    } else {
+                        // AI didn't use placeholder — replace the first real image (hero) as fallback
+                        var replaced = false;
+                        restoredHtml = restoredHtml.replace(/<img([^>]*?)src="([^"]*?)"([^>]*?)>/i, function(match, pre, src, post) {
+                            if (!replaced && src && src !== '' && !src.startsWith('data:image/svg')) {
+                                replaced = true;
+                                return '<img' + pre + 'src="' + newImageDataUrl + '"' + post + '>';
+                            }
+                            return match;
+                        });
+                    }
+                }
                 // AI made an edit — update the preview
                 state.currentEditHtml = restoredHtml;
-                cacheEditorState();  // sessionStorage + in-memory
                 saveHtmlDraft();     // background Drive save (debounced 3s)
                 document.getElementById('editorIframe').srcdoc = injectPreviewLinkGuard(restoredHtml);
                 state.chatHistory.push({ role: 'assistant', content: result.message || '\u00c4nderung umgesetzt!' });
+                cacheEditorState();  // cache after assistant msg is pushed
             } else {
                 // Chat-only response — no HTML change, pop undo stack
                 state.htmlUndoStack.pop();
                 updateUndoButton();
                 state.chatHistory.push({ role: 'assistant', content: result.message || 'Ich kann dir dabei leider nicht helfen.' });
+                cacheEditorState();  // cache chat-only responses too
             }
         } catch (e) {
             var isRateLimit = e && e.message && e.message.toLowerCase().includes('rate limit');
@@ -1333,7 +1497,7 @@
                 try {
                     var retryResult = await apiPost('/lead/' + state.leadId + '/chat-edit', {
                         html: htmlToSend, message: messageToSend, template_key: state.template,
-                        history: state.chatHistory.slice(0, -1),
+                        history: state.chatHistory.filter(function(m) { return !m.uiOnly; }).slice(0, -1),
                         business_context: {
                             business_name: state.formData.business_name || (state.leadData && state.leadData.business_name) || '',
                             description: state.formData.description || '',
@@ -1348,8 +1512,21 @@
                         var retryHtml = retryResult.html
                             .replace(/src="\[BILD_(\d+)\]"/g, function(_, i) { return 'src="' + (dataUrls[parseInt(i)] || '') + '"'; })
                             .replace(/url\(\[BILD_(\d+)\]\)/g, function(_, i) { return 'url(' + (dataUrls[parseInt(i)] || '') + ')'; })
-                            .replace(/<!-- STYLE_(\d+) -->/g, function(_, i) { return styleBlocks[parseInt(i)] || ''; })
                             .replace(/<!-- SCRIPT_(\d+) -->/g, function(_, i) { return scriptBlocks[parseInt(i)] || ''; });
+                        if (newImageDataUrl) {
+                            if (retryHtml.indexOf('[NEUES_BILD]') !== -1) {
+                                retryHtml = retryHtml.replace(/\[NEUES_BILD\]/g, newImageDataUrl);
+                            } else {
+                                var retryReplaced = false;
+                                retryHtml = retryHtml.replace(/<img([^>]*?)src="([^"]*?)"([^>]*?)>/i, function(match, pre, src, post) {
+                                    if (!retryReplaced && src && src !== '' && !src.startsWith('data:image/svg')) {
+                                        retryReplaced = true;
+                                        return '<img' + pre + 'src="' + newImageDataUrl + '"' + post + '>';
+                                    }
+                                    return match;
+                                });
+                            }
+                        }
                         state.currentEditHtml = retryHtml;
                         cacheEditorState();
                         document.getElementById('editorIframe').srcdoc = injectPreviewLinkGuard(retryHtml);
@@ -1379,17 +1556,38 @@
 
     function undoLastEdit() {
         if (!state.htmlUndoStack.length) return;
+        if (!window.confirm('Letzte \u00c4nderung r\u00fcckg\u00e4ngig machen? Alles bis zur letzten Nachricht wird r\u00fcckg\u00e4ngig gemacht.')) return;
+        state.htmlRedoStack.push(state.currentEditHtml);
         state.currentEditHtml = state.htmlUndoStack.pop();
         cacheEditorState();
         document.getElementById('editorIframe').srcdoc = injectPreviewLinkGuard(state.currentEditHtml);
         updateUndoButton();
+        updateRedoButton();
         state.chatHistory.push({ role: 'assistant', content: 'Letzte \u00c4nderung r\u00fcckg\u00e4ngig gemacht.' });
+        renderChatMessages();
+    }
+
+    function redoLastEdit() {
+        if (!state.htmlRedoStack.length) return;
+        state.htmlUndoStack.push(state.currentEditHtml);
+        if (state.htmlUndoStack.length > 20) state.htmlUndoStack.shift();
+        state.currentEditHtml = state.htmlRedoStack.pop();
+        cacheEditorState();
+        document.getElementById('editorIframe').srcdoc = injectPreviewLinkGuard(state.currentEditHtml);
+        updateUndoButton();
+        updateRedoButton();
+        state.chatHistory.push({ role: 'assistant', content: '\u00c4nderung wiederhergestellt.' });
         renderChatMessages();
     }
 
     function updateUndoButton() {
         var btn = document.getElementById('chatUndoBtn');
         if (btn) btn.disabled = !state.htmlUndoStack.length;
+    }
+
+    function updateRedoButton() {
+        var btn = document.getElementById('chatRedoBtn');
+        if (btn) btn.disabled = !state.htmlRedoStack.length;
     }
 
     function triggerChatImageUpload() {
@@ -1403,47 +1601,49 @@
 
         if (!file.type.startsWith('image/')) {
             alert('Bitte nur Bilddateien hochladen.');
+            input.value = '';
             return;
         }
         if (file.size > 5 * 1024 * 1024) {
             alert('Das Bild ist zu gross (max. 5MB).');
+            input.value = '';
             return;
         }
 
-        state.chatHistory.push({ role: 'user', content: '\ud83d\udcf7 Bild wird hochgeladen: ' + file.name });
-        renderChatMessages();
-        showTypingIndicator();
+        // Store the pending file — don't upload or send yet
+        state.pendingChatImage = file;
 
-        try {
-            var formData = new FormData();
-            formData.append('image', file);
+        // Show attachment preview in the input area
+        var existingPreview = document.getElementById('chatImagePreview');
+        if (existingPreview) existingPreview.remove();
 
-            var res = await fetch('/api/lead/' + state.leadId + '/upload-chat-image', {
-                method: 'POST',
-                body: formData,
-            });
-            var data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Upload fehlgeschlagen');
+        var preview = document.createElement('div');
+        preview.id = 'chatImagePreview';
+        preview.className = 'db-chat-image-preview';
+        preview.innerHTML = '<img src="' + URL.createObjectURL(file) + '" alt="Vorschau">'
+            + '<span class="db-chat-image-name">\ud83d\udcf7 ' + escHtml(file.name) + '</span>'
+            + '<button class="db-chat-image-remove" onclick="window.__removeChatImage()" title="Bild entfernen">\u00d7</button>';
 
-            state.lastUploadedImageUrl = data.url;
+        var inputWrap = document.querySelector('.db-chat-input-wrap');
+        if (inputWrap) inputWrap.insertBefore(preview, inputWrap.firstChild);
 
-            hideTypingIndicator();
-            state.chatHistory[state.chatHistory.length - 1].content = '\ud83d\udcf7 Bild hochgeladen: ' + file.name;
-            state.chatHistory.push({
-                role: 'assistant',
-                content: 'Bild erhalten! Sag mir, wo ich es einsetzen soll (z.B. "Verwende dieses Bild als Hauptbild" oder "Ersetze das Bild im \u00dcber-uns-Bereich").',
-            });
-            renderChatMessages();
-        } catch (e) {
-            hideTypingIndicator();
-            state.chatHistory[state.chatHistory.length - 1].content = '\ud83d\udcf7 Upload fehlgeschlagen: ' + file.name;
-            state.chatHistory.push({ role: 'assistant', content: 'Das Bild konnte leider nicht hochgeladen werden. Versuch es nochmal.' });
-            renderChatMessages();
-            console.error('Image upload error:', e);
+        // Focus chat input so user can type a message
+        var chatInput = document.getElementById('chatInput');
+        if (chatInput) {
+            chatInput.placeholder = 'z.B. Verwende dieses Bild als Hauptbild\u2026';
+            chatInput.focus();
         }
 
         input.value = '';
     }
+
+    window.__removeChatImage = function() {
+        state.pendingChatImage = null;
+        var preview = document.getElementById('chatImagePreview');
+        if (preview) preview.remove();
+        var chatInput = document.getElementById('chatInput');
+        if (chatInput) chatInput.placeholder = 'z.B. \u00c4ndere die \u00dcberschrift zu\u2026';
+    };
 
     function toggleChat() {
         state.chatPanelOpen = !state.chatPanelOpen;
@@ -1558,6 +1758,10 @@
 
     function renderDomainCards() {
         var list = document.getElementById('domainList');
+        // Reset continue button — only enable after user selects a domain
+        var step5Btn = document.getElementById('step5NextBtn');
+        if (step5Btn) step5Btn.disabled = true;
+        state.domain = null;
         var html = '';
 
         state.domainSuggestions.forEach(function (d, i) {
@@ -1600,6 +1804,8 @@
     /* ---------- Step 6: Review ---------- */
     function renderReview() {
         document.getElementById('reviewDomain').textContent = state.domain || '\u2014';
+        var leadIdEl = document.getElementById('reviewLeadId');
+        if (leadIdEl) leadIdEl.textContent = state.leadId || '\u2014';
     }
 
     async function openPreview() {
@@ -1670,6 +1876,8 @@
         formData.append('agreed_to_terms', 'true');
         if (state.customizations.phone) formData.append('phone', state.customizations.phone);
         if (state.customizations.address) formData.append('address', state.customizations.address);
+        var _orderEmail = (state.leadData && (state.leadData.owner_email || state.leadData.emails)) || '';
+        if (_orderEmail) formData.append('email', _orderEmail);
         if (state.logoFile) formData.append('logo', state.logoFile);
         state.imageFiles.forEach(function (f) { formData.append('images', f); });
 
@@ -1684,7 +1892,21 @@
     function navStep(n) {
         if (n > highestStepReached || n === state.currentStep) return;
 
-        if (state.currentStep === 4 && state.currentEditHtml) saveCurrentHtml();
+        // Clicking step 1 in the nav = same as going back to start
+        if (n === 1) {
+            window.dbGoBack(1);
+            return;
+        }
+
+        if (state.currentStep === 4 && state.currentEditHtml) {
+            cacheEditorState(); // ensure sessionStorage + in-memory cache are up to date
+            saveCurrentHtml();  // persist to Drive (async, fire-and-forget)
+            // Clear in-memory state so re-entry uses cache lookup (keyed per template)
+            state.currentEditHtml = '';
+            state.chatHistory = [];
+            state.htmlUndoStack = [];
+            state.htmlRedoStack = [];
+        }
 
         if (n === 2) renderInfoForm();
         if (n === 3) { initTemplateStep(); setTimeout(scaleIframes, 50); }
@@ -1708,7 +1930,53 @@
 
     /* ---------- Expose to HTML onclick ---------- */
     window.dbGoBack = function (n) {
-        if (state.currentStep === 4 && state.currentEditHtml) saveCurrentHtml();
+        // Going back to step 1: warn user, clear session so they start fresh
+        if (n === 1 || n === 0) {
+            if (!window.confirm('Bist du sicher, dass du zurückgehen willst?\n\nDein Fortschritt geht verloren. Um zu dieser Sitzung zurückzukehren, brauchst du deinen Zugangscode, der dir per E-Mail gesendet wurde.')) {
+                return;
+            }
+            // Clear all session data
+            try {
+                sessionStorage.removeItem('db_nocode_leadId');
+                sessionStorage.removeItem('db_nocode_step');
+                sessionStorage.removeItem('db_nocode_template');
+                localStorage.removeItem('db_leadId');
+                localStorage.removeItem('db_step');
+                localStorage.removeItem('db_template');
+            } catch(e) {}
+            // Reset state
+            state.leadId = '';
+            state.leadData = null;
+            state.isNoCode = false;
+            state.template = null;
+            state.formData = { business_name: '', description: '', services: '', strengths: '', phone: '', address: '' };
+            state.customizations = { description: '', values: '', phone: '', address: '' };
+            state.domain = null;
+            state.domainSuggestions = [];
+            state.chatHistory = [];
+            state.currentEditHtml = '';
+            state.htmlUndoStack = [];
+            state.htmlRedoStack = [];
+            state.hasExistingFormData = false;
+            state.logoFile = null;
+            state.imageFiles = [];
+            highestStepReached = 1;
+            // Clear form inputs
+            var leadInput = document.getElementById('leadIdInput');
+            var emailInput = document.getElementById('emailInput');
+            if (leadInput) leadInput.value = '';
+            if (emailInput) emailInput.value = '';
+            goToStep(1);
+            return;
+        }
+        if (state.currentStep === 4) {
+            if (state.currentEditHtml) {
+                cacheEditorState(); // ensure sessionStorage is up to date before clearing
+                saveCurrentHtml();  // persist to Drive (async, fire-and-forget)
+                state.currentEditHtml = ''; // clear so re-entry always uses cache lookup
+            }
+            if (n === 3) initTemplateStep(); // re-sync card selection visuals
+        }
         goToStep(n);
     };
     window.dbStep2Next = onStep2Next;
@@ -1723,6 +1991,7 @@
     window.dbToggleChat = toggleChat;
     window.dbSetDevice = setDevice;
     window.dbUndo = undoLastEdit;
+    window.dbRedo = redoLastEdit;
     window.dbChatUpload = triggerChatImageUpload;
     window.__chatImageChanged = handleChatImageUpload;
 

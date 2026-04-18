@@ -13,6 +13,10 @@ Website Builder/.env
 # Wrangler
 .wrangler/
 
-# OAuth tokens (sensitive)
+# OAuth tokens + service account keys + client credentials (sensitive — never commit)
 token.json
 **/token.json
+credentials.json
+**/credentials.json
+service_account.json
+**/service_account.json

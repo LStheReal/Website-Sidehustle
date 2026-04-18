@@ -14,20 +14,24 @@
 }
 
 :root {
-    --bg:       #0a0a0a;
-    --card:     #111111;
-    --card2:    #181818;
-    --green:    #a6ff00;
-    --white:    #ffffff;
-    --grey:     #555555;
-    --lgrey:    #888888;
-    --stroke:   #222222;
-    --red:      #ff4444;
-    --font:     'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    --pill:     100px;
-    --ease:     cubic-bezier(0.25, 0.8, 0.25, 1);
-    --max-w:    720px;
+    --bg:        #080808;
+    --card:      #121212;
+    --card2:     #1a1a1a;
+    --green:     #a6ff00;
+    --white:     #ffffff;
+    --grey:      #5f5f5f;
+    --lgrey:     #9a9a9a;
+    --stroke:    #2a2a2a;
+    --stroke-hi: #3f3f3f;
+    --red:       #ff4444;
+    --font:      'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --pill:      100px;
+    --ease:      cubic-bezier(0.22, 0.8, 0.26, 1);
+    --ease-spring: cubic-bezier(0.34, 1.35, 0.64, 1);
+    --max-w:     720px;
     --max-w-wide: 960px;
+    --shadow-card: 0 2px 8px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+    --shadow-pop:  0 4px 16px rgba(0,0,0,0.4), 0 28px 64px rgba(0,0,0,0.45);
 }
 
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -39,6 +43,9 @@ body {
     font-size: 16px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: 'ss01', 'cv11', 'calt';
     min-height: 100vh;
     overscroll-behavior: none;
 }
@@ -80,7 +87,7 @@ a { text-decoration: none; color: inherit; }
     left: 0;
     right: 0;
     z-index: 100;
-    background: rgba(10, 10, 10, 0.92);
+    background: rgba(8, 8, 8, 0.92);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     border-bottom: 0.5px solid var(--stroke);
@@ -118,7 +125,7 @@ a { text-decoration: none; color: inherit; }
 .db-help-link {
     font-size: 0.78rem;
     font-weight: 600;
-    color: #aaa;
+    color: var(--lgrey);
     white-space: nowrap;
     transition: color 0.2s;
     flex-shrink: 0;
@@ -160,8 +167,8 @@ a { text-decoration: none; color: inherit; }
     justify-content: center;
     font-size: 0.72rem;
     font-weight: 700;
-    color: #aaa;
-    transition: all 0.35s var(--ease);
+    color: var(--lgrey);
+    transition: all 0.35s var(--ease-spring);
     flex-shrink: 0;
 }
 .db-progress-step.active .db-progress-num {
@@ -175,10 +182,10 @@ a { text-decoration: none; color: inherit; }
 }
 .db-progress-label {
     font-size: 0.72rem;
-    color: #aaa;
+    color: var(--lgrey);
     font-weight: 500;
     white-space: nowrap;
-    transition: color 0.35s var(--ease);
+    transition: color 0.35s var(--ease-spring);
 }
 .db-progress-step.active .db-progress-label { color: var(--white); }
 .db-progress-step.done .db-progress-label { color: var(--lgrey); }
@@ -261,11 +268,12 @@ a { text-decoration: none; color: inherit; }
 
 .db-id-card {
     background: var(--card);
-    border: 0.5px solid var(--stroke);
-    border-radius: 28px;
+    border: 1px solid var(--stroke);
+    border-radius: 24px;
     padding: 2.5rem 2rem;
     width: 100%;
     text-align: center;
+    box-shadow: var(--shadow-card);
 }
 
 .db-card-icon {
@@ -283,7 +291,7 @@ a { text-decoration: none; color: inherit; }
 
 .db-card-desc {
     font-size: 0.88rem;
-    color: #aaa;
+    color: var(--lgrey);
     line-height: 1.5;
     margin-bottom: 1.5rem;
 }
@@ -303,13 +311,13 @@ a { text-decoration: none; color: inherit; }
 .db-heading {
     font-size: clamp(1.8rem, 4vw, 2.5rem);
     font-weight: 800;
-    letter-spacing: -0.04em;
-    line-height: 1;
+    letter-spacing: -0.045em;
+    line-height: 1.02;
     margin-bottom: 0.75rem;
 }
 .db-subtext {
     font-size: 0.95rem;
-    color: #aaa;
+    color: var(--lgrey);
     line-height: 1.55;
     margin-bottom: 2rem;
 }
@@ -325,7 +333,7 @@ a { text-decoration: none; color: inherit; }
     width: 100%;
     padding: 0.9rem 1.5rem;
     border-radius: var(--pill);
-    border: 0.5px solid var(--stroke);
+    border: 1.5px solid var(--stroke-hi);
     background: #000;
     color: var(--white);
     font-size: 1rem;
@@ -333,10 +341,10 @@ a { text-decoration: none; color: inherit; }
     outline: none;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
-.db-input::placeholder { color: #888; }
+.db-input::placeholder { color: var(--grey); }
 .db-input:focus {
     border-color: var(--green);
-    box-shadow: 0 0 0 2px rgba(166, 255, 0, 0.15);
+    box-shadow: 0 0 0 3px rgba(166, 255, 0, 0.22);
 }
 .db-input.error {
     border-color: var(--red);
@@ -360,7 +368,7 @@ a { text-decoration: none; color: inherit; }
     width: 100%;
     padding: 0.9rem 1.25rem;
     border-radius: 14px;
-    border: 0.5px solid var(--stroke);
+    border: 1.5px solid var(--stroke-hi);
     background: #000;
     color: var(--white);
     font-size: 0.95rem;
@@ -370,10 +378,10 @@ a { text-decoration: none; color: inherit; }
     min-height: 80px;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
-.db-textarea::placeholder { color: #888; }
+.db-textarea::placeholder { color: var(--grey); }
 .db-textarea:focus {
     border-color: var(--green);
-    box-shadow: 0 0 0 2px rgba(166, 255, 0, 0.15);
+    box-shadow: 0 0 0 3px rgba(166, 255, 0, 0.22);
 }
 
 /* Label */
@@ -383,7 +391,7 @@ a { text-decoration: none; color: inherit; }
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: #aaa;
+    color: var(--lgrey);
     margin-bottom: 0.5rem;
 }
 .db-input-group {
@@ -399,7 +407,7 @@ a { text-decoration: none; color: inherit; }
     border-radius: 14px;
     border: 1.5px dashed var(--stroke);
     background: transparent;
-    color: #aaa;
+    color: var(--lgrey);
     font-size: 0.85rem;
     font-family: var(--font);
     cursor: pointer;
@@ -486,8 +494,8 @@ a { text-decoration: none; color: inherit; }
 }
 .db-btn-ghost {
     background: transparent;
-    color: #aaa;
-    border: 0.5px solid var(--stroke);
+    color: var(--lgrey);
+    border: 1px solid var(--stroke-hi);
 }
 .db-btn-ghost:hover { border-color: var(--lgrey); color: var(--white); }
 .db-btn-skip {
@@ -518,7 +526,7 @@ a { text-decoration: none; color: inherit; }
     display: inline-block;
     margin-top: 1.5rem;
     font-size: 0.85rem;
-    color: #aaa;
+    color: var(--lgrey);
     transition: color 0.2s;
 }
 .db-back-link:hover { color: var(--white); }
@@ -537,15 +545,17 @@ a { text-decoration: none; color: inherit; }
 }
 .db-tpl-card {
     background: var(--card);
-    border: 0.5px solid var(--stroke);
-    border-radius: 20px;
+    border: 1px solid var(--stroke);
+    border-radius: 18px;
     padding: 1.25rem;
     cursor: pointer;
     transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+    box-shadow: var(--shadow-card);
 }
 .db-tpl-card:hover {
     transform: translateY(-4px);
     border-color: rgba(255,255,255,0.12);
+    box-shadow: var(--shadow-pop);
 }
 .db-tpl-card.selected {
     border-color: var(--green);
@@ -561,7 +571,7 @@ a { text-decoration: none; color: inherit; }
 }
 .db-tpl-desc {
     font-size: 0.82rem;
-    color: #aaa;
+    color: var(--lgrey);
     margin-bottom: 0.75rem;
 }
 .db-tpl-tags {
@@ -576,7 +586,7 @@ a { text-decoration: none; color: inherit; }
     background: var(--card2);
     font-size: 0.68rem;
     font-weight: 600;
-    color: #aaa;
+    color: var(--lgrey);
     white-space: nowrap;
 }
 
@@ -623,7 +633,7 @@ a { text-decoration: none; color: inherit; }
     border: 0.5px solid var(--stroke);
     font-size: 0.75rem;
     font-weight: 600;
-    color: #aaa;
+    color: var(--lgrey);
     margin-bottom: 1.5rem;
 }
 .db-badge-dot {
@@ -640,7 +650,7 @@ a { text-decoration: none; color: inherit; }
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: #aaa;
+    color: var(--lgrey);
     margin-bottom: 1.25rem;
     padding-bottom: 0.75rem;
     border-bottom: 0.5px solid var(--stroke);
@@ -658,7 +668,7 @@ a { text-decoration: none; color: inherit; }
 }
 .db-field-hint {
     font-size: 0.78rem;
-    color: #aaa;
+    color: var(--lgrey);
     margin: -0.25rem 0 0.75rem;
     line-height: 1.5;
 }
@@ -679,13 +689,14 @@ a { text-decoration: none; color: inherit; }
     align-items: center;
     gap: 1.25rem;
     background: var(--card);
-    border: 0.5px solid var(--stroke);
-    border-radius: 20px;
+    border: 1px solid var(--stroke);
+    border-radius: 18px;
     padding: 1.25rem 1.75rem;
     cursor: pointer;
     transition: border-color 0.2s, box-shadow 0.2s;
+    box-shadow: var(--shadow-card);
 }
-.db-domain-card:hover { border-color: rgba(255,255,255,0.12); }
+.db-domain-card:hover { border-color: rgba(255,255,255,0.12); box-shadow: var(--shadow-pop); }
 .db-domain-card.selected {
     border-color: var(--green);
     box-shadow: 0 0 0 2px rgba(166, 255, 0, 0.15);
@@ -759,17 +770,18 @@ a { text-decoration: none; color: inherit; }
 }
 .db-review-section {
     background: var(--card);
-    border: 0.5px solid var(--stroke);
-    border-radius: 20px;
+    border: 1px solid var(--stroke);
+    border-radius: 18px;
     padding: 1.75rem;
     margin-bottom: 1rem;
+    box-shadow: var(--shadow-card);
 }
 .db-review-title {
     font-size: 0.75rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: #aaa;
+    color: var(--lgrey);
     margin-bottom: 1rem;
 }
 .db-review-row {
@@ -782,7 +794,7 @@ a { text-decoration: none; color: inherit; }
 .db-review-row:last-child { border-bottom: none; }
 .db-review-key {
     font-size: 0.85rem;
-    color: #aaa;
+    color: var(--lgrey);
     flex-shrink: 0;
     min-width: 130px;
 }
@@ -815,7 +827,7 @@ a { text-decoration: none; color: inherit; }
 }
 .db-review-price-label {
     font-size: 0.85rem;
-    color: #aaa;
+    color: var(--lgrey);
     margin-top: 0.35rem;
 }
 
@@ -861,7 +873,7 @@ a { text-decoration: none; color: inherit; }
 }
 .db-review-note {
     font-size: 0.85rem;
-    color: #aaa;
+    color: var(--lgrey);
     text-align: center;
     margin-top: 1rem;
     line-height: 1.6;
@@ -904,7 +916,7 @@ a { text-decoration: none; color: inherit; }
     align-items: center;
     justify-content: space-between;
     padding: 0.75rem 1.5rem;
-    background: rgba(10, 10, 10, 0.95);
+    background: rgba(8, 8, 8, 0.95);
     border-bottom: 0.5px solid var(--stroke);
     flex-shrink: 0;
 }
@@ -956,7 +968,7 @@ a { text-decoration: none; color: inherit; }
     position: fixed;
     inset: 0;
     z-index: 200;
-    background: rgba(10, 10, 10, 0.95);
+    background: rgba(8, 8, 8, 0.95);
     backdrop-filter: blur(20px);
     flex-direction: column;
     align-items: center;
@@ -1009,7 +1021,7 @@ a { text-decoration: none; color: inherit; }
 }
 .db-payment-footer p {
     font-size: 0.85rem;
-    color: #888;
+    color: var(--lgrey);
 }
 .db-payment-footer a {
     color: #333;
@@ -1146,7 +1158,7 @@ a { text-decoration: none; color: inherit; }
     border-bottom: 1px solid var(--stroke);
     font-weight: 600;
     font-size: 0.82rem;
-    color: #aaa;
+    color: var(--lgrey);
     flex-shrink: 0;
 }
 
@@ -1332,26 +1344,27 @@ a { text-decoration: none; color: inherit; }
 }
 .db-chat-input {
     flex: 1;
-    background: #f5f5f5;
-    border: 1px solid #d0d0d0;
+    background: var(--bg);
+    border: 1.5px solid var(--stroke-hi);
     border-radius: 8px;
     padding: 0.5rem 0.7rem;
-    color: #333;
+    color: var(--white);
     font-size: 0.88rem;
     resize: none;
     font-family: inherit;
     line-height: 1.4;
 }
-.db-chat-input::placeholder { color: #999; }
+.db-chat-input::placeholder { color: var(--grey); }
 .db-chat-input:focus {
     outline: none;
     border-color: var(--green);
+    box-shadow: 0 0 0 3px rgba(166, 255, 0, 0.22);
 }
 .db-chat-upload-btn {
     background: none;
-    border: 1px solid #d0d0d0;
+    border: 1px solid var(--stroke-hi);
     border-radius: 8px;
-    color: #555;
+    color: var(--lgrey);
     font-size: 1.1rem;
     cursor: pointer;
     padding: 0.45rem 0.55rem;
@@ -1412,7 +1425,7 @@ a { text-decoration: none; color: inherit; }
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: #aaa;
+    background: var(--lgrey);
     animation: chatTypingDot 1.4s infinite;
 }
 .db-chat-typing span:nth-child(2) { animation-delay: 0.2s; }
@@ -1539,7 +1552,7 @@ a { text-decoration: none; color: inherit; }
 }
 .db-access-code-label {
     font-size: 0.75rem;
-    color: #aaa;
+    color: var(--lgrey);
     text-transform: uppercase;
     letter-spacing: 0.1em;
     margin-bottom: 0.25rem;
@@ -1555,13 +1568,13 @@ a { text-decoration: none; color: inherit; }
 }
 .db-access-code-hint {
     font-size: 0.78rem;
-    color: #aaa;
+    color: var(--lgrey);
     margin-top: 0.5rem;
     line-height: 1.5;
 }
 .db-review-plan-note {
     font-size: 0.83rem;
-    color: #aaa;
+    color: var(--lgrey);
     text-align: center;
     margin-top: 0.5rem;
     margin-bottom: 1rem;

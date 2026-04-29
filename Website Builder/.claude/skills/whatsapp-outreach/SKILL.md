@@ -35,7 +35,7 @@ python3 send_whatsapp.py \
 
 ## Message Variants
 
-- `day0` — Cold first contact, introduces meine-kmu.ch, 4 links
+- `day0` — Cold first contact, introduces freshnew.ch, 4 links
 - `post_call` — After phone conversation, "wie besprochen", 4 links
 - `followup` — Gentle reminder after 7 days, 4 links
 

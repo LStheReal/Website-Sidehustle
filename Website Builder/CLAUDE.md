@@ -55,13 +55,16 @@ Automated pipeline that finds businesses without websites, builds websites for t
 
 ### Domain & Deployment
 - `find-domain` — Find 3 available .ch/.com domains, check via RDAP/WHOIS, update Google Sheet with clickable buy links.
-- `deploy-website` — Deploy static sites to Cloudflare Pages (free), update Google Sheet with live URL.
-- `process-order` — **Post-order automation**: triggered automatically after "Website jetzt bestellen" is clicked. Builds the final site, deploys to a unique `kmu-<slug>-<id>.pages.dev` subdomain, updates the sheet, sends internal notification to info@meine-kmu.ch (with live URL, domain purchase link, Cloudflare setup link, lead email), and sends customer thank-you email with 48h promise.
+- `deploy-website` — Deploy static sites to Cloudflare Pages (free), update Google Sheet with live URL. **Used only by `process-order` (final paid sites).** Drafts no longer use this — they use the KV-routed worker (see below).
+- `process-order` — **Post-order automation**: triggered automatically after "Website jetzt bestellen" is clicked. Builds the final site, deploys to a unique `kmu-<slug>-<id>.pages.dev` subdomain, updates the sheet, sends internal notification to info@freshnew.ch (with live URL, domain purchase link, Cloudflare setup link, lead email), and sends customer thank-you email with 48h promise.
+
+**Draft deployment (KV-routed, infinite scale):** Drafts for cold-scraped leads are NOT deployed as separate Cloudflare Pages projects. Instead, `pipeline_manager.py --action process` POSTs to `https://freshnew.ch/api/lead/<id>/generate-all` with `Authorization: Bearer ${CRON_SECRET}` (set in `.env`). The worker generates 4 templates, saves them to `DRAFTS_KV`, and serves them at `https://freshnew.ch/draft/<leadId>/<template>`. This bypasses the Cloudflare Pages 100-project free-tier limit. The worker also writes both `url_<tpl>` (cols 50–53) and `draft_url_<n>_<tpl>` (cols 35–38) sheet columns so all downstream skills work unchanged.
 
 ### Outreach
 - `whatsapp-outreach` — **Primary outreach channel.** Generate personalized German WhatsApp messages with clickable wa.me deep links. All leads have phone numbers. Variants: day0 (first contact), post_call (after phone), followup (Day 7 reminder).
 - `call-assistant` — Generate word-for-word German call scripts for beginners. Includes confidence builders, decision tree, objection handling, and clickable wa.me link to send WhatsApp right after the call. Supports 3 contexts: cold, post-email, post-whatsapp.
 - `cold-email` — Generate personalized German cold emails (Day 7 follow-up + Day 14 breakup). Used as secondary channel for leads that have email addresses.
+- `instagram-dm` — Generate ready-to-send German DMs for leads that have Instagram but no email. Outputs clickable IG profile link + copy-paste DM for each lead. Use when user says "instagram leads", "IG DMs", or "who do I contact on instagram".
 - `write-email` — General-purpose German email for all stages: onboarding, status update, domain confirmation, delivery, invoice, support.
 
 ### Orchestration
@@ -82,6 +85,7 @@ You are the project manager. The user should never need to know script names, CL
 | "build website for [name]" / "process [name]" | **Spawn subagent** (see Subagent Tasks below) |
 | "send whatsapp" / "outreach" | Run `pipeline-manager --action send-whatsapp` |
 | "send emails" | Run `pipeline-manager --action send-emails` |
+| "instagram leads" / "IG DMs" / "who to DM on insta" | Run `instagram-dm` skill |
 | "write email to [name]" | Find lead, infer stage from status, run `write-email` |
 | "find domain for [name]" | Run `find-domain` |
 | "prepare call for [name]" | Run `call-assistant` (generates word-for-word script + wa.me link) |

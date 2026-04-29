@@ -38,10 +38,75 @@ const PREVIEW_CACHE_TTL = 30 * 60 * 1000;
 let _cachedToken = null;
 let _cachedTokenExp = 0;
 
-async function getAccessToken(env) {
-  // Return cached token if still valid (4-minute TTL)
-  if (_cachedToken && Date.now() < _cachedTokenExp) return _cachedToken;
+// ── Service Account JWT helpers ──────────────────────────
+// Used to mint Google API access tokens without refresh-token churn.
+// (OAuth refresh tokens get revoked periodically; service accounts don't.)
+function _b64UrlFromString(s) {
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function _b64UrlFromBytes(buf) {
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function _pemToArrayBuffer(pem) {
+  const b64 = pem
+    .replace(/-----BEGIN [^-]+-----/, "")
+    .replace(/-----END [^-]+-----/, "")
+    .replace(/\s+/g, "");
+  const bin = atob(b64);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return buf.buffer;
+}
+async function _signJwtRS256(saJson) {
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const claims = {
+    iss: saJson.client_email,
+    scope: "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file",
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600,
+  };
+  const headerB64 = _b64UrlFromString(JSON.stringify(header));
+  const claimsB64 = _b64UrlFromString(JSON.stringify(claims));
+  const signingInput = `${headerB64}.${claimsB64}`;
 
+  const keyBuf = _pemToArrayBuffer(saJson.private_key);
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    keyBuf,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sigBuf = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    new TextEncoder().encode(signingInput)
+  );
+  return `${signingInput}.${_b64UrlFromBytes(sigBuf)}`;
+}
+
+async function _getAccessTokenViaServiceAccount(saJsonStr) {
+  const sa = JSON.parse(saJsonStr);
+  const jwt = await _signJwtRS256(sa);
+  const resp = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: jwt,
+    }),
+  });
+  const data = await resp.json();
+  if (!data.access_token) throw new Error("SA token failed: " + JSON.stringify(data));
+  return data.access_token;
+}
+
+async function _getAccessTokenViaRefreshToken(env) {
   const creds = JSON.parse(env.GOOGLE_CREDENTIALS_JSON);
   const token = JSON.parse(env.GOOGLE_TOKEN_JSON);
   const installed = creds.installed || creds.web;
@@ -57,10 +122,29 @@ async function getAccessToken(env) {
   });
   const data = await resp.json();
   if (!data.access_token) throw new Error("Google token refresh failed: " + JSON.stringify(data));
-
-  _cachedToken = data.access_token;
-  _cachedTokenExp = Date.now() + 240000; // 4 minutes
   return data.access_token;
+}
+
+async function getAccessToken(env) {
+  // Return cached token if still valid (4-minute TTL)
+  if (_cachedToken && Date.now() < _cachedTokenExp) return _cachedToken;
+
+  let accessToken;
+  // Prefer Service Account (JWT-signed, never expires/gets revoked) when available.
+  if (env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+    try {
+      accessToken = await _getAccessTokenViaServiceAccount(env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    } catch (e) {
+      console.error("[auth] SA failed, falling back to OAuth refresh:", e && e.message);
+    }
+  }
+  if (!accessToken) {
+    accessToken = await _getAccessTokenViaRefreshToken(env);
+  }
+
+  _cachedToken = accessToken;
+  _cachedTokenExp = Date.now() + 240000; // 4 minutes
+  return accessToken;
 }
 
 // ── Google Sheets ─────────────────────────────────────────
@@ -185,7 +269,7 @@ const TEMPLATE_DEFAULTS = {
     SERVICE_1_TITLE: "Beratung", SERVICE_1_DESCRIPTION: "Transparentes Erstgespräch zu Anforderungen und Ablauf.",
     SERVICE_2_TITLE: "Ausführung", SERVICE_2_DESCRIPTION: "Termintreue und präzise Umsetzung.",
     SERVICE_3_TITLE: "Feinschliff", SERVICE_3_DESCRIPTION: "Kontrolle aller Details für ein sauberes Resultat.",
-    SERVICE_4_TITLE: "Nachbetreuung", SERVICE_4_DESCRIPTION: "Langfristige Unterstützung nach Projektabschluss.",
+    SERVICE_4_TITLE: "", SERVICE_4_DESCRIPTION: "",
     SECTION_LABEL_ABOUT: "Über uns", ABOUT_HEADING: "Unser Anspruch", ABOUT_DESCRIPTION: "Strukturiert, termintreu und sauber bis ins Detail.",
     STAT_1_NUMBER: "10+", STAT_1_LABEL: "Jahre Erfahrung", STAT_2_NUMBER: "500+", STAT_2_LABEL: "Projekte",
     STAT_3_NUMBER: "100%", STAT_3_LABEL: "Engagement",
@@ -207,9 +291,9 @@ const TEMPLATE_DEFAULTS = {
     SERVICE_1_TITLE: "Beratung", SERVICE_1_DESCRIPTION: "Persönliche Beratung.",
     SERVICE_2_TITLE: "Umsetzung", SERVICE_2_DESCRIPTION: "Professionelle Ausführung.",
     SERVICE_3_TITLE: "Nachbetreuung", SERVICE_3_DESCRIPTION: "Langfristige Betreuung.",
-    SERVICE_4_TITLE: "Planung", SERVICE_4_DESCRIPTION: "Optimale Ergebnisse.",
-    SERVICE_5_TITLE: "Qualitätssicherung", SERVICE_5_DESCRIPTION: "Höchste Standards.",
-    SERVICE_6_TITLE: "Kundendienst", SERVICE_6_DESCRIPTION: "Schnell und zuverlässig.",
+    SERVICE_4_TITLE: "", SERVICE_4_DESCRIPTION: "",
+    SERVICE_5_TITLE: "", SERVICE_5_DESCRIPTION: "",
+    SERVICE_6_TITLE: "", SERVICE_6_DESCRIPTION: "",
     SECTION_LABEL_FEATURE: "Warum wir", FEATURE_HEADING: "Warum wir?",
     FEATURE_DESCRIPTION: "Qualität und Kundennähe.", FEATURE_POINT_1: "Erfahrung", FEATURE_POINT_2: "Betreuung", FEATURE_POINT_3: "Faire Preise",
     SECTION_LABEL_ABOUT: "Über uns", ABOUT_HEADING: "Über uns", ABOUT_LEAD: "Qualität und Vertrauen.",
@@ -344,7 +428,7 @@ ${context}
 
 WICHTIGE REGELN:
 1. Die Texte vom Kunden (Beschreibung, Leistungen, Besonderheiten) sind die WICHTIGSTE Grundlage. Verwende sie als Basis für alle Texte. Du darfst umformulieren und professionell aufbereiten, aber der Inhalt MUSS dem entsprechen, was der Kunde geschrieben hat.
-2. Verwende die Leistungen des Kunden DIREKT als SERVICE_1/2/3 Titel und Beschreibungen. Erfinde KEINE anderen Leistungen. Wenn der Kunde nur 1-2 Leistungen nennt, fülle die restlichen SERVICE-Felder mit "".
+2. Verwende die Leistungen des Kunden DIREKT als SERVICE_1–6 Titel und Beschreibungen. Erfinde KEINE anderen Leistungen. Fülle genau so viele SERVICE-Felder wie der Kunde Leistungen genannt hat. Alle SERVICE-Felder ohne passende Leistung MÜSSEN "" (leer) sein.
 3. Verwende die Besonderheiten/Stärken des Kunden DIREKT für FEATURE_POINT, VALUE und STAT Felder. Erfinde KEINE konkreten Zahlen oder Statistiken (z.B. "500+ Kunden", "20 Jahre"). Verwende NUR Zahlen, die der Kunde explizit genannt hat. Wenn keine Zahlen: verwende beschreibende Wörter wie "Persönlich", "Regional", "Zuverlässig".
 4. Erfinde KEINE Social-Media-Handles, Instagram-Namen, URLs oder E-Mail-Adressen.
 5. Wenn der Kunde wenig Info gegeben hat: schreibe kürzere, allgemeinere Texte. Weniger Text ist besser als falscher Text. Setze Felder auf "" wenn du keinen passenden Inhalt hast.
@@ -374,6 +458,12 @@ Generiere ein JSON-Objekt mit diesen Feldern:
   "SERVICE_2_DESCRIPTION": "1 Satz zu Leistung 2, oder leer",
   "SERVICE_3_TITLE": "Leistung aus Kundenbeschreibung, oder leer",
   "SERVICE_3_DESCRIPTION": "1 Satz zu Leistung 3, oder leer",
+  "SERVICE_4_TITLE": "Leistung aus Kundenbeschreibung, oder leer",
+  "SERVICE_4_DESCRIPTION": "1 Satz zu Leistung 4, oder leer",
+  "SERVICE_5_TITLE": "Leistung aus Kundenbeschreibung, oder leer",
+  "SERVICE_5_DESCRIPTION": "1 Satz zu Leistung 5, oder leer",
+  "SERVICE_6_TITLE": "Leistung aus Kundenbeschreibung, oder leer",
+  "SERVICE_6_DESCRIPTION": "1 Satz zu Leistung 6, oder leer",
   "CTA_DESCRIPTION": "Handlungsaufforderung, 1 Satz",
   "CTA_TITLE_LINE1": "CTA Titel Zeile 1, 2-3 Wörter",
   "CTA_TITLE_LINE2": "CTA Titel Zeile 2, 2-3 Wörter",
@@ -840,43 +930,66 @@ async function handleOrder(leadId, request, env) {
   const sheetData = await getSheetValues(accessToken, env.LEADS_SHEET_ID);
   const lead = findLead(sheetData, leadId);
   if (!lead) return jsonResp({ error: "Lead not found" }, 404);
-  const fd = await request.formData();
-  const chosenTemplate = fd.get("chosen_template")||"", description = fd.get("description")||"";
-  const services = fd.get("services")||"", strengths = fd.get("strengths")||"";
-  const selectedDomain = fd.get("selected_domain")||"";
-  const phone = fd.get("phone")||"", address = fd.get("address")||"";
-  const email = fd.get("email") || lead.owner_email || lead.emails || "";
-  if (fd.get("agreed_to_terms") !== "true") return jsonResp({ error: "AGB müssen akzeptiert werden." }, 400);
+  // Parse with hybrid parser (Pages Advanced mode loses File entries via native formData)
+  const parsed = await parseMultipartHybrid(request);
+  const f = parsed.fields;
+  const chosenTemplate = f.chosen_template || "", description = f.description || "";
+  const services = f.services || "", strengths = f.strengths || "";
+  const selectedDomain = f.selected_domain || "";
+  const phone = f.phone || "", address = f.address || "";
+  const email = f.email || lead.owner_email || lead.emails || "";
+  if (f.agreed_to_terms !== "true") return jsonResp({ error: "AGB müssen akzeptiert werden." }, 400);
   if (!chosenTemplate) return jsonResp({ error: "Kein Template gewählt." }, 400);
 
-  const logo = fd.get("logo");
-  const images = fd.getAll("images");
+  const logo = parsed.logo;       // {bytes, type, name} | null
+  const images = parsed.images;   // [{bytes, type, name}]
+  // The frontend sends the exact HTML the user approved in the editor — already has
+  // logo/images embedded as base64 + any chat edits. If present, deploy it verbatim.
+  const finalHtmlFromClient = f.final_html;
+  console.log(`[order] lead=${leadId} tpl=${chosenTemplate} logo=${logo ? logo.bytes.length : "none"} imgs=${images.length}`);
 
   // 1. Upload files to Google Drive (non-blocking for main flow)
   let driveFolderUrl = "";
   try {
     const folderId = await getOrCreateFolder(accessToken, env.DRIVE_UPLOAD_FOLDER_ID, `${lead.business_name||leadId} (${leadId})`);
     driveFolderUrl = `https://drive.google.com/drive/folders/${folderId}`;
-    if (logo && logo.size > 0) await uploadFileToDrive(accessToken, folderId, await logo.arrayBuffer(), `logo_${logo.name}`, logo.type||"image/png");
+    if (logo) await uploadFileToDrive(accessToken, folderId, logo.bytes.buffer.slice(logo.bytes.byteOffset, logo.bytes.byteOffset + logo.bytes.byteLength), `logo_${logo.name}`, logo.type || "image/png");
     for (const img of images) {
-      if (img && img.size > 0) await uploadFileToDrive(accessToken, folderId, await img.arrayBuffer(), `image_${img.name}`, img.type||"image/png");
+      await uploadFileToDrive(accessToken, folderId, img.bytes.buffer.slice(img.bytes.byteOffset, img.bytes.byteOffset + img.bytes.byteLength), `image_${img.name}`, img.type || "image/png");
     }
   } catch (e) { console.error("Drive error:", e); }
 
-  // 2. Use cached preview HTML if available, otherwise regenerate
+  // 2. Determine final HTML. Priority order — most authoritative first:
+  //    a) final_html from client = the EXACT HTML the user approved in the editor
+  //       (logo + images already base64-embedded, chat edits applied). Deploy verbatim.
+  //    b) Cached preview HTML from a recent /api/preview-with-images call (best-effort,
+  //       per-isolate cache so unreliable across Workers).
+  //    c) Regenerate from raw template via generateFinalHTML.
+  //
+  // (a) is what guarantees "what you see is what gets shipped" — it's the only path
+  // where the user's uploaded logo + images are 100% preserved through the order.
   let finalHtml = null;
   let liveUrl = "";
   let projectName = "";
-  const cached = previewCache.get(leadId);
-  if (cached && cached.template === chosenTemplate && (Date.now() - cached.timestamp) < PREVIEW_CACHE_TTL) {
-    finalHtml = cached.html;
-    previewCache.delete(leadId);
-    console.log("Using cached preview HTML for", leadId);
+  const hasOrderFiles = !!logo || images.length > 0;
+
+  if (finalHtmlFromClient && typeof finalHtmlFromClient === "string" && finalHtmlFromClient.length > 100) {
+    finalHtml = finalHtmlFromClient;
+    console.log("Using client-supplied final_html for", leadId, "(", finalHtmlFromClient.length, "bytes )");
   } else {
-    try {
-      const result = await generateFinalHTML(env, request.url, chosenTemplate, leadId, description, services, strengths, logo, images, phone, address, email);
-      finalHtml = result.html;
-    } catch (e) { console.error("HTML generation error:", e); }
+    // No client HTML → fall back to cache (only when no files at risk) or regen
+    const cached = !hasOrderFiles ? previewCache.get(leadId) : null;
+    if (cached && cached.template === chosenTemplate && (Date.now() - cached.timestamp) < PREVIEW_CACHE_TTL) {
+      finalHtml = cached.html;
+      previewCache.delete(leadId);
+      console.log("Using cached preview HTML for", leadId);
+    } else {
+      try {
+        const result = await generateFinalHTML(env, request.url, chosenTemplate, leadId, description, services, strengths, logo, images, phone, address, email);
+        finalHtml = result.html;
+        if (hasOrderFiles) console.log("Regenerated from FormData (order had files) for", leadId);
+      } catch (e) { console.error("HTML generation error:", e); }
+    }
   }
 
   // 3. Deploy to Cloudflare Pages
@@ -955,6 +1068,12 @@ async function handlePreview(leadId, templateKey, request, env, ctx) {
   for (const [key, value] of Object.entries(merged)) html = html.replaceAll(`{{${key}}}`, value);
   html = html.replace(/\{\{[A-Z_0-9]+\}\}/g, "");
 
+  // Remove empty service cards (SC markers set in templates)
+  html = html.replace(/<!-- SC:(\d+) -->([\s\S]*?)<!-- \/SC:\1 -->/g, (_m, _n, content) => {
+    if (/<h3[^>]*>\s*<\/h3>/i.test(content)) return '';
+    return content;
+  });
+
   // Fix CSS path
   html = html.replaceAll('href="styles.css"', `href="/${templateDir}/styles.css"`);
   html = html.replaceAll('href="./styles.css"', `href="/${templateDir}/styles.css"`);
@@ -980,8 +1099,8 @@ async function handlePreview(leadId, templateKey, request, env, ctx) {
           }
         } catch (e) { console.error("CSS inline for deploy failed:", e); }
         // Fix asset paths to absolute URLs so they work from the deployed domain
-        deployHtml = deployHtml.replace(/src="\/(templates\/[^"]+)"/g, 'src="https://meinekmu.pages.dev/$1"');
-        deployHtml = deployHtml.replace(/href="\/(templates\/[^"]+)"/g, 'href="https://meinekmu.pages.dev/$1"');
+        deployHtml = deployHtml.replace(/src="\/(templates\/[^"]+)"/g, 'src="https://freshnew.ch/$1"');
+        deployHtml = deployHtml.replace(/href="\/(templates\/[^"]+)"/g, 'href="https://freshnew.ch/$1"');
 
         const projectName = generateTemplateProjectName(businessName, leadId, templateKey);
         const deployUrl = await deployToCloudflarePages(env, projectName, deployHtml);
@@ -996,8 +1115,151 @@ async function handlePreview(leadId, templateKey, request, env, ctx) {
 }
 
 // Convert ArrayBuffer to base64 (chunked, safe for large files)
+// ── data:URL → parsed file shape ────────────────────
+// Accepts "data:image/jpeg;base64,..." and returns {bytes, type, name} matching
+// the multipart parser's output, so generateFinalHTML can treat both uniformly.
+function dataUrlToParsedFile(dataUrl, name) {
+  if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) return null;
+  const commaIdx = dataUrl.indexOf(",");
+  if (commaIdx < 0) return null;
+  const meta = dataUrl.slice(5, commaIdx); // e.g. "image/jpeg;base64"
+  const isB64 = /;base64$/i.test(meta);
+  const mime = (meta.split(";")[0] || "application/octet-stream").trim();
+  const payload = dataUrl.slice(commaIdx + 1);
+  if (!isB64) return null; // we don't bother with raw text data URLs
+  let bin;
+  try { bin = atob(payload); } catch (e) { return null; }
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  if (bytes.length === 0) return null;
+  return { bytes, type: mime, name: name || "file" };
+}
+
+// ── Multipart parser (manual only) ─────────────────
+// Cloudflare Pages Functions in Advanced mode (single _worker.js) reliably
+// drops File entries from request.formData() — text fields parse but file
+// fields come back as empty strings or are omitted entirely. We bypass the
+// native parser entirely and read raw body bytes once. Returns:
+//   { fields: {name: str}, logo: {bytes,type,name}|null, images: [{bytes,type,name}] }
+async function parseMultipartHybrid(request) {
+  const out = { fields: {}, logo: null, images: [] };
+  const contentType = request.headers.get("content-type") || "";
+  if (!contentType.includes("multipart/form-data")) return out;
+
+  let bytes;
+  try {
+    const buf = await request.arrayBuffer();
+    bytes = new Uint8Array(buf);
+  } catch (e) {
+    console.error("[multipart] body read failed:", e && e.message);
+    return out;
+  }
+  console.log(`[multipart] body=${bytes.length}B ct="${contentType.slice(0, 80)}"`);
+
+  let parsed;
+  try {
+    parsed = parseMultipart(bytes, contentType);
+  } catch (e) {
+    console.error("[multipart] parse failed:", e && e.message);
+    return out;
+  }
+
+  for (const k of Object.keys(parsed.fields)) out.fields[k] = parsed.fields[k];
+  for (const part of parsed.files) {
+    if (!part.bytes || part.bytes.length === 0) continue;
+    const norm = { bytes: part.bytes, type: part.type || "application/octet-stream", name: part.filename || part.field };
+    if (part.field === "logo") out.logo = norm;
+    else if (part.field === "images") out.images.push(norm);
+  }
+  console.log(`[multipart] parsed fields=${Object.keys(out.fields).join(",")} logo=${out.logo ? out.logo.bytes.length + "B/" + out.logo.type : "none"} images=${out.images.length}${out.images.length ? " (" + out.images.map(i => i.bytes.length + "B/" + i.type).join(",") + ")" : ""}`);
+  return out;
+}
+
+// ── Manual multipart/form-data parser ─────────────────
+// Cloudflare Pages Functions (Advanced mode, single _worker.js) sometimes
+// fails to surface File objects via request.formData() — text fields parse
+// fine but file parts come back as empty strings. This is a fallback that
+// parses the raw body bytes directly. Returns { fields: {name: string},
+// files: [{ field, filename, type, bytes: Uint8Array }] }.
+function parseMultipart(bodyBytes, contentType) {
+  const out = { fields: {}, files: [] };
+  const m = /boundary=(?:"([^"]+)"|([^;,\s]+))/i.exec(contentType || "");
+  if (!m) return out;
+  const boundary = m[1] || m[2];
+  const td = new TextDecoder("utf-8");
+
+  // Build delimiter bytes: "--" + boundary
+  const delim = new TextEncoder().encode("--" + boundary);
+  const CRLF = new Uint8Array([13, 10]);
+  const DASHDASH = new Uint8Array([45, 45]);
+
+  // Find indices of all delimiter occurrences
+  function indexOf(haystack, needle, start) {
+    outer: for (let i = start; i <= haystack.length - needle.length; i++) {
+      for (let j = 0; j < needle.length; j++) {
+        if (haystack[i + j] !== needle[j]) continue outer;
+      }
+      return i;
+    }
+    return -1;
+  }
+
+  let pos = 0;
+  while (pos < bodyBytes.length) {
+    const dStart = indexOf(bodyBytes, delim, pos);
+    if (dStart < 0) break;
+    let after = dStart + delim.length;
+    // Closing boundary "--boundary--"
+    if (after + 1 < bodyBytes.length && bodyBytes[after] === 45 && bodyBytes[after + 1] === 45) break;
+    // Skip CRLF after delimiter
+    if (after + 1 < bodyBytes.length && bodyBytes[after] === 13 && bodyBytes[after + 1] === 10) after += 2;
+
+    // Find headers/body split (CRLFCRLF)
+    let hbSplit = -1;
+    for (let i = after; i < bodyBytes.length - 3; i++) {
+      if (bodyBytes[i] === 13 && bodyBytes[i + 1] === 10 && bodyBytes[i + 2] === 13 && bodyBytes[i + 3] === 10) {
+        hbSplit = i; break;
+      }
+    }
+    if (hbSplit < 0) break;
+    const headerStr = td.decode(bodyBytes.subarray(after, hbSplit));
+    const bodyStart = hbSplit + 4;
+
+    // Find next delimiter to determine part body end (account for CRLF before it)
+    const nextD = indexOf(bodyBytes, delim, bodyStart);
+    if (nextD < 0) break;
+    let bodyEnd = nextD;
+    if (bodyEnd >= 2 && bodyBytes[bodyEnd - 2] === 13 && bodyBytes[bodyEnd - 1] === 10) bodyEnd -= 2;
+
+    // Parse headers
+    let field = "", filename = null, type = "";
+    for (const line of headerStr.split("\r\n")) {
+      const lower = line.toLowerCase();
+      if (lower.startsWith("content-disposition:")) {
+        const nameMatch = /name="([^"]*)"/i.exec(line);
+        const filenameMatch = /filename="([^"]*)"/i.exec(line);
+        if (nameMatch) field = nameMatch[1];
+        if (filenameMatch) filename = filenameMatch[1];
+      } else if (lower.startsWith("content-type:")) {
+        type = line.substring(line.indexOf(":") + 1).trim();
+      }
+    }
+
+    const partBytes = bodyBytes.subarray(bodyStart, bodyEnd);
+    if (filename !== null) {
+      out.files.push({ field, filename, type, bytes: new Uint8Array(partBytes) });
+    } else {
+      out.fields[field] = td.decode(partBytes);
+    }
+
+    pos = nextD;
+  }
+  return out;
+}
+
 function arrayBufferToBase64(buffer) {
-  const bytes = new Uint8Array(buffer);
+  // Accept either an ArrayBuffer or a Uint8Array (preserve subarray view).
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   const chunks = [];
   for (let i = 0; i < bytes.length; i += 8192) {
     const chunk = bytes.subarray(i, i + 8192);
@@ -1033,14 +1295,24 @@ async function generateFinalHTML(env, requestUrl, templateKey, leadId, descripti
   const cust = { description, services, strengths, phone: phone || "", address: address || "", email: email || "" };
   const placeholderData = leadToPlaceholderData(lead || { business_name: "" }, cust);
 
-  // 4. Process uploaded images — convert to data URLs for override
-  const images = (imageFiles || []).filter(f => f && f.size > 0);
-  const imageDataUrls = [];
-  for (const img of images) {
-    const buf = await img.arrayBuffer();
-    const b64 = arrayBufferToBase64(buf);
-    imageDataUrls.push(`data:${img.type || "image/png"};base64,${b64}`);
+  // 4. Process uploaded images — convert to data URLs for override.
+  // Accept either File-like (with .arrayBuffer()) OR pre-parsed {bytes,type,name}.
+  async function _toBytes(f) {
+    if (!f) return null;
+    if (f.bytes instanceof Uint8Array) return { bytes: f.bytes, type: f.type, name: f.name };
+    if (typeof f.arrayBuffer === "function" && f.size > 0) {
+      const buf = await f.arrayBuffer();
+      return { bytes: new Uint8Array(buf), type: f.type || "application/octet-stream", name: f.name || "" };
+    }
+    return null;
   }
+  const images = [];
+  for (const img of (imageFiles || [])) {
+    const b = await _toBytes(img);
+    if (b && b.bytes.length > 0) images.push(b);
+  }
+  const imageDataUrls = images.map(i => `data:${i.type || "image/png"};base64,${arrayBufferToBase64(i.bytes)}`);
+  const logoBytes = await _toBytes(logoFile);
 
   // Override IMAGE_* placeholders with uploaded images
   if (imageDataUrls.length > 0) {
@@ -1062,19 +1334,28 @@ async function generateFinalHTML(env, requestUrl, templateKey, leadId, descripti
   }
   html = html.replace(/\{\{[A-Z_0-9]+\}\}/g, "");
 
+  // 6.5. Remove empty service cards (SC markers set in templates)
+  html = html.replace(/<!-- SC:(\d+) -->([\s\S]*?)<!-- \/SC:\1 -->/g, (_m, _n, content) => {
+    if (/<h3[^>]*>\s*<\/h3>/i.test(content)) return '';
+    return content;
+  });
+
   // 7. Fix CSS + relative image paths
   html = html.replaceAll('href="styles.css"', `href="/${templateDir}/styles.css"`);
   html = html.replaceAll('href="./styles.css"', `href="/${templateDir}/styles.css"`);
   html = html.replace(/src="assets\//g, `src="/${templateDir}/assets/`);
 
   // 8. Inject logo
-  if (logoFile && logoFile.size > 0) {
-    const logoBuf = await logoFile.arrayBuffer();
-    const logoB64 = arrayBufferToBase64(logoBuf);
-    const logoDataUrl = `data:${logoFile.type || "image/png"};base64,${logoB64}`;
+  if (logoBytes) {
+    const logoDataUrl = `data:${logoBytes.type || "image/png"};base64,${arrayBufferToBase64(logoBytes.bytes)}`;
     const logoImgTag = `<img src="${logoDataUrl}" alt="Logo" style="height:40px;width:auto;object-fit:contain;">`;
     const footerLogoTag = `<img src="${logoDataUrl}" alt="Logo" style="height:32px;width:auto;object-fit:contain;">`;
-    html = html.replace(/(<(?:a|div)[^>]*class="[^"]*nav-logo[^"]*"[^>]*>)([\s\S]*?)(<\/(?:a|div)>)/i, `$1${logoImgTag}$3`);
+    // Case 1: div.nav-logo containing an anchor (BIA, earlydog)
+    html = html.replace(/(<div[^>]*class="[^"]*nav-logo[^"]*"[^>]*>)([\s\S]*?)(<\/div>)/i,
+      (_m, open, content, close) => open + content.replace(/(<a[^>]*>)([\s\S]*?)(<\/a>)/i, `$1${logoImgTag}$3`) + close);
+    // Case 2: a.nav-logo directly (loveseen, liveblocks)
+    html = html.replace(/(<a[^>]*class="[^"]*nav-logo[^"]*"[^>]*>)([\s\S]*?)(<\/a>)/i, `$1${logoImgTag}$3`);
+    // Footer / contact logos
     html = html.replace(/(<(?:a|div|span)[^>]*class="[^"]*(?:contact-logo|footer-logo(?:-text)?)[^"]*"[^>]*>)([\s\S]*?)(<\/(?:a|div|span)>)/i, `$1${footerLogoTag}$3`);
   }
 
@@ -1088,6 +1369,30 @@ async function generateFinalHTML(env, requestUrl, templateKey, leadId, descripti
     }
   } catch (e) { console.error("CSS inline failed:", e); }
 
+  // 10. Inject legal popup JS (works in iframes where CSS :target fails)
+  // Selector targets ALL legal-page anchors across templates (bia/earlydog use
+  // .footer-legal-links, loveseen uses .footer-legal, liveblocks uses .footer-col).
+  const legalJs = `<script>
+(function(){
+  document.querySelectorAll('a[href^="#impressum"],a[href^="#datenschutz"]').forEach(function(a){
+    a.addEventListener('click',function(e){
+      e.preventDefault();
+      var id=a.getAttribute('href').replace('#','');
+      var el=document.getElementById(id);
+      if(el){el.style.display='block';el.scrollTop=0;window.scrollTo(0,0);}
+    });
+  });
+  document.querySelectorAll('.legal-close').forEach(function(btn){
+    btn.addEventListener('click',function(e){
+      e.preventDefault();
+      var page=btn.closest('.legal-page');
+      if(page)page.style.display='none';
+    });
+  });
+})();
+<\/script>`;
+  html = html.replace('</body>', legalJs + '\n</body>');
+
   return { html, aiCategory };
 }
 
@@ -1098,18 +1403,56 @@ async function handlePreviewWithImages(request, env) {
     return new Response("Too many requests", { status: 429, headers: { "Access-Control-Allow-Origin": "*" } });
 
   try {
-    const fd = await request.formData();
-    const leadId = fd.get("lead_id") || "";
-    const templateKey = fd.get("template") || "";
-    const description = fd.get("description") || "";
-    const services = fd.get("services") || "";
-    const strengths = fd.get("strengths") || "";
-    const phone = fd.get("phone") || "";
-    const address = fd.get("address") || "";
-    const email = fd.get("email") || "";
+    // Accept both JSON (preferred — base64 data URLs from canvas-normalized client)
+    // and multipart (legacy — actual File uploads). JSON is the primary path.
+    const contentType = request.headers.get("content-type") || "";
+    let leadId, templateKey, description, services, strengths, phone, address, email;
+    let logoArg = null;     // either {bytes,type,name} or a data: URL string
+    let imageArgs = [];      // array of either shape
+
+    if (contentType.includes("application/json")) {
+      const body = await request.json();
+      leadId = body.lead_id || "";
+      templateKey = body.template || "";
+      description = body.description || "";
+      services = body.services || "";
+      strengths = body.strengths || "";
+      phone = body.phone || "";
+      address = body.address || "";
+      email = body.email || "";
+      // Convert incoming data URLs into our normalized {bytes,type,name} shape so
+      // generateFinalHTML's downstream logic doesn't need a special path.
+      if (typeof body.logo_data_url === "string" && body.logo_data_url.startsWith("data:")) {
+        logoArg = dataUrlToParsedFile(body.logo_data_url, "logo");
+      }
+      if (Array.isArray(body.image_data_urls)) {
+        imageArgs = body.image_data_urls
+          .filter(u => typeof u === "string" && u.startsWith("data:"))
+          .map((u, i) => dataUrlToParsedFile(u, `image_${i + 1}`))
+          .filter(Boolean);
+      }
+      console.log(`[preview-with-images:json] lead=${leadId} tpl=${templateKey} logo=${logoArg ? logoArg.bytes.length + "B" : "none"} imgs=${imageArgs.length}`);
+    } else {
+      const parsed = await parseMultipartHybrid(request);
+      const f = parsed.fields;
+      leadId = f.lead_id || "";
+      templateKey = f.template || "";
+      description = f.description || "";
+      services = f.services || "";
+      strengths = f.strengths || "";
+      phone = f.phone || "";
+      address = f.address || "";
+      email = f.email || "";
+      logoArg = parsed.logo;
+      imageArgs = parsed.images;
+      console.log(`[preview-with-images:mp] lead=${leadId} tpl=${templateKey} logo=${logoArg ? logoArg.bytes.length : "none"} imgs=${imageArgs.length}`);
+    }
+
+    if (!templateKey) return new Response("Error: missing template", { status: 400, headers: { "Access-Control-Allow-Origin": "*" } });
+
     const result = await generateFinalHTML(
       env, request.url, templateKey, leadId, description, services, strengths,
-      fd.get("logo"), fd.getAll("images"), phone, address, email
+      logoArg, imageArgs, phone, address, email
     );
     const html = result.html;
     const aiCategory = result.aiCategory;
@@ -1158,8 +1501,8 @@ async function saveDraftToKV(env, leadId, templateKey, htmlContent) {
   if (!env.DRAFTS_KV) throw new Error("DRAFTS_KV not bound");
   const key = `${leadId}/${templateKey}`;
   await env.DRAFTS_KV.put(key, htmlContent);
-  // Return a URL that our worker can serve (use pages.dev — meine-kmu.ch DNS not yet linked)
-  return `https://meinekmu.pages.dev/draft/${leadId}/${templateKey}`;
+  // Return a URL that our worker can serve (use pages.dev — freshnew.ch DNS not yet linked)
+  return `https://freshnew.ch/draft/${leadId}/${templateKey}`;
 }
 
 // ── Delete all drafts for a lead from KV ──
@@ -1216,10 +1559,10 @@ async function deployToCloudflarePages(env, projectName, htmlContent) {
 // ── Email Helpers (Resend API) ───────────────────────────
 function emailHeader() {
   return `<div style="background:#1a1a1a;padding:18px 24px;">
-    <a href="https://meine-kmu.ch" target="_blank" style="text-decoration:none;">
+    <a href="https://freshnew.ch" target="_blank" style="text-decoration:none;">
       <span style="color:#fff;font-size:22px;font-weight:800;letter-spacing:-0.5px;
         font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Helvetica,Arial,sans-serif;">
-        meine-kmu<span style="color:#a6ff00;">.</span>
+        freshNew<span style="color:#a6ff00;">.</span>
       </span>
     </a>
   </div>`;
@@ -1227,9 +1570,9 @@ function emailHeader() {
 
 function emailFooter() {
   return `<div style="background:#f5f5f5;padding:16px 24px;font-size:12px;color:#888;border-top:1px solid #e0e0e0;">
-    <p style="margin:0;">meine-kmu.ch &nbsp;·&nbsp;
-      <a href="mailto:info@meine-kmu.ch" style="color:#888;">info@meine-kmu.ch</a> &nbsp;·&nbsp;
-      <a href="https://meine-kmu.ch" style="color:#888;">meine-kmu.ch</a>
+    <p style="margin:0;">freshnew.ch &nbsp;·&nbsp;
+      <a href="mailto:info@freshnew.ch" style="color:#888;">info@freshnew.ch</a> &nbsp;·&nbsp;
+      <a href="https://freshnew.ch" style="color:#888;">freshnew.ch</a>
     </p>
   </div>`;
 }
@@ -1292,7 +1635,7 @@ async function sendEmail(env, to, subject, html) {
       method: "POST",
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "meine-kmu.ch <info@meine-kmu.ch>",
+        from: "freshnew.ch <info@freshnew.ch>",
         to: [to], subject, html,
       }),
     });
@@ -1328,18 +1671,11 @@ function buildWebsiteGrid(lead) {
 }
 
 function emailPreviewCard(url, label, bgColor, accentColor) {
+  const thumbUrl = `https://api.microlink.io/?url=${encodeURIComponent(url)}&screenshot=true&meta=false&embed=screenshot.url`;
   return `<td width="50%" style="padding:5px;">
     <a href="${url}" target="_blank" style="display:block;text-decoration:none;color:#444;">
-      <div style="background:${bgColor};border:1px solid #ddd;border-radius:8px;overflow:hidden;">
-        <div style="padding:32px 16px;text-align:center;">
-          <div style="width:40px;height:4px;background:${accentColor};margin:0 auto 12px;border-radius:2px;"></div>
-          <div style="font-size:11px;color:${accentColor};letter-spacing:1.5px;text-transform:uppercase;font-weight:600;">${label}</div>
-          <div style="width:60%;height:2px;background:${accentColor};opacity:0.2;margin:10px auto 0;border-radius:1px;"></div>
-        </div>
-        <div style="background:${accentColor};padding:10px 16px;text-align:center;">
-          <span style="color:#fff;font-size:12px;font-weight:600;">Vorschau ansehen →</span>
-        </div>
-      </div>
+      <img src="${thumbUrl}" width="100%" style="border:1px solid #ddd;border-radius:5px;display:block;" alt="${label}">
+      <div style="text-align:center;font-size:12px;margin-top:6px;font-weight:600;">${label} →</div>
     </a>
   </td>`;
 }
@@ -1353,8 +1689,8 @@ ${emailHeader()}
     ${bodyHtml}
     <p style="margin-bottom:0;margin-top:24px;">Freundliche Grüsse<br>
     <strong>Louise & Mael</strong><br>
-    <span style="color:#555;">info@meine-kmu.ch</span><br>
-    <a href="https://meine-kmu.ch" style="color:#555;">meine-kmu.ch</a></p>
+    <span style="color:#555;">info@freshnew.ch</span><br>
+    <a href="https://freshnew.ch" style="color:#555;">freshnew.ch</a></p>
   </div>
 ${emailFooter()}
 </body></html>`;
@@ -1364,12 +1700,12 @@ function codeBox(leadId) {
   return `<div style="background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;padding:22px;margin:20px 0;text-align:center;">
       <div style="font-size:11px;color:#999;margin-bottom:8px;text-transform:uppercase;letter-spacing:1.5px;">Dein persönlicher Code</div>
       <div style="font-size:30px;font-weight:bold;letter-spacing:6px;color:#1a1a1a;margin-bottom:16px;">${leadId}</div>
-      <a href="https://meinekmu.pages.dev/onboarding.html" style="background:#1a1a1a;color:#fff;padding:11px 26px;border-radius:4px;text-decoration:none;font-size:14px;font-weight:600;display:inline-block;">Zugriff erhalten →</a>
+      <a href="https://freshnew.ch/onboarding.html" style="background:#1a1a1a;color:#fff;padding:11px 26px;border-radius:4px;text-decoration:none;font-size:14px;font-weight:600;display:inline-block;">Zugriff erhalten →</a>
     </div>`;
 }
 
 function ctaButton(text, url) {
-  const href = url || "https://meinekmu.pages.dev/onboarding.html";
+  const href = url || "https://freshnew.ch/onboarding.html";
   return `<div style="text-align:center;margin:20px 0;">
       <a href="${href}" style="display:inline-block;background:#1a1a1a;color:#fff;padding:11px 26px;border-radius:4px;text-decoration:none;font-size:14px;font-weight:600;">${text}</a>
     </div>`;
@@ -1392,7 +1728,7 @@ async function sendReminderEmail(env, lead, variant) {
     2: {
       subject: `Können wir dir helfen, ${businessName}?`,
       text: `<p style="margin-top:0;">Deine Website Entwürfe für <strong>${businessName}</strong> sind immer noch bei uns gespeichert. Falls irgendwas unklar ist oder du nicht weiterkommst, schreib uns einfach. Wir helfen dir gerne weiter!</p>
-      <p>Du kannst uns auch direkt erreichen: <a href="mailto:info@meine-kmu.ch" style="color:#1a1a1a;">info@meine-kmu.ch</a></p>`,
+      <p>Du kannst uns auch direkt erreichen: <a href="mailto:info@freshnew.ch" style="color:#1a1a1a;">info@freshnew.ch</a></p>`,
     },
     3: {
       subject: `Immer noch Interesse an einer Website, ${businessName}?`,
@@ -1460,7 +1796,7 @@ async function sendOrderConfirmation(env, lead, selectedDomain) {
   const previewUrl = lead[`url_${chosenKey}`] || lead.url_earlydog || lead.url_bia || lead.url_liveblocks || lead.url_loveseen || "";
   let previewSection = "";
   if (previewUrl) {
-    const thumbUrl = `https://image.thum.io/get/width/560/crop/400/${previewUrl}`;
+    const thumbUrl = `https://api.microlink.io/?url=${encodeURIComponent(previewUrl)}&screenshot=true&meta=false&embed=screenshot.url`;
     previewSection = `<div style="margin:20px 0;">
       <a href="${previewUrl}" target="_blank" style="display:block;text-decoration:none;">
         <img src="${thumbUrl}" width="100%" style="border:1px solid #ddd;border-radius:5px;display:block;" alt="Deine Website">
@@ -1483,7 +1819,7 @@ async function sendOrderConfirmation(env, lead, selectedDomain) {
 
     <p>Innerhalb von 48 Stunden ist deine Website unter <strong>${domainDisplay}</strong> live erreichbar. Wir melden uns sobald alles bereit ist!</p>
 
-    <p>Falls du Fragen hast, schreib uns einfach: <a href="mailto:info@meine-kmu.ch" style="color:#1a1a1a;">info@meine-kmu.ch</a></p>
+    <p>Falls du Fragen hast, schreib uns einfach: <a href="mailto:info@freshnew.ch" style="color:#1a1a1a;">info@freshnew.ch</a></p>
   `);
   await sendEmail(env, email, subject, html);
 }
@@ -1531,7 +1867,7 @@ async function sendCancellationEmail(env, lead) {
 
     <p>Wir wünschen dir alles Gute!</p>
 
-    <p>Fragen? Schreib uns: <a href="mailto:info@meine-kmu.ch" style="color:#1a1a1a;">info@meine-kmu.ch</a></p>
+    <p>Fragen? Schreib uns: <a href="mailto:info@freshnew.ch" style="color:#1a1a1a;">info@freshnew.ch</a></p>
   `);
   await sendEmail(env, email, subject, html);
 }
@@ -1795,12 +2131,12 @@ async function verifyStripeSignature(payload, sigHeader, secret) {
 async function sendInternalNotification(env, leadId, businessName, leadEmail, liveUrl, selectedDomain, purchaseLink, cfDomainLink) {
   // Generate a one-time token for the confirm-live action.
   // This keeps the CRON_SECRET out of email bodies, browser history, and server logs.
-  let confirmUrl = `https://meinekmu.pages.dev/api/lead/${leadId}/confirm-live?secret=${env.CRON_SECRET || ""}`;
+  let confirmUrl = `https://freshnew.ch/api/lead/${leadId}/confirm-live?secret=${env.CRON_SECRET || ""}`;
   if (env.DRAFTS_KV) {
     try {
       const token = crypto.randomUUID().replace(/-/g, "");
       await env.DRAFTS_KV.put(`confirm_token:${token}`, leadId, { expirationTtl: 14 * 24 * 3600 });
-      confirmUrl = `https://meinekmu.pages.dev/api/confirm-live?token=${token}`;
+      confirmUrl = `https://freshnew.ch/api/confirm-live?token=${token}`;
     } catch (e) { console.error("Token generation failed, falling back to secret URL:", e); }
   }
   const subject = `Neue Bestellung — ${businessName} (${leadId})`;
@@ -1858,7 +2194,7 @@ ${emailHeader()}
   </div>
 ${emailFooter()}
 </body></html>`;
-  await sendEmail(env, "info@meine-kmu.ch", subject, html);
+  await sendEmail(env, "info@freshnew.ch", subject, html);
 }
 
 // ── Save Form Data ───────────────────────────────────────
@@ -1910,16 +2246,39 @@ function generateTemplateProjectName(businessName, leadId, templateKey) {
 async function handleGenerateAll(leadId, request, env, ctx) {
   if (!leadId) return jsonResp({ error: "Invalid lead ID" }, 400);
 
-  // Rate limiting: max 3 generations per lead per hour (this is expensive — AI + Pexels × 4)
-  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
-  if (!await checkRateLimit(env, `gen-lead:${leadId}`, 3, 3600))
-    return jsonResp({ error: "Generierungslimit erreicht. Versuche es in einer Stunde erneut." }, 429);
-  if (!await checkRateLimit(env, `gen-ip:${ip}`, 10, 3600))
-    return jsonResp({ error: "Zu viele Anfragen von dieser IP." }, 429);
+  // Internal CLI calls (pipeline_manager) authenticate with CRON_SECRET and
+  // bypass the user-facing rate limits. Public dashboard calls (no auth header)
+  // still hit the limits below.
+  const auth = request.headers.get("Authorization") || "";
+  const isInternal = !!env.CRON_SECRET && auth === `Bearer ${env.CRON_SECRET}`;
 
-  // Accept form data from request body (avoids race condition with save-form)
+  if (!isInternal) {
+    // Rate limiting: max 3 generations per lead per hour (this is expensive — AI + Pexels × 4)
+    const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+    if (!await checkRateLimit(env, `gen-lead:${leadId}`, 3, 3600))
+      return jsonResp({ error: "Generierungslimit erreicht. Versuche es in einer Stunde erneut." }, 429);
+    if (!await checkRateLimit(env, `gen-ip:${ip}`, 10, 3600))
+      return jsonResp({ error: "Zu viele Anfragen von dieser IP." }, 429);
+  }
+
+  // Accept either multipart FormData (with actual image files) OR JSON body.
+  // Multipart is the primary path from dashboard step 2 — it lets us embed the
+  // customer's real logo + images into the 4 pre-deployed sites.
   let bodyData = {};
-  try { bodyData = await request.json(); } catch { /* empty body is fine */ }
+  let logoFile = null;   // { bytes: Uint8Array, type, name }
+  let imageFiles = [];    // [{ bytes, type, name }]
+  const contentType = request.headers.get("content-type") || "";
+  try {
+    if (contentType.includes("multipart/form-data")) {
+      const parsed = await parseMultipartHybrid(request);
+      bodyData = parsed.fields;
+      logoFile = parsed.logo;
+      imageFiles = parsed.images;
+    } else {
+      bodyData = await request.json();
+    }
+  } catch (e) { console.error("[generate-all] body parse error:", e && e.message, e && e.stack); }
+  console.log(`[generate-all:body] ct="${contentType}" logoBytes=${logoFile ? logoFile.bytes.length : "none"} imageFiles=${imageFiles.length} bodyKeys=${Object.keys(bodyData).join(",")}`);
 
   let accessToken;
   try { accessToken = await getAccessToken(env); } catch { return jsonResp({ error: "Verbindungsfehler." }, 500); }
@@ -1936,6 +2295,27 @@ async function handleGenerateAll(leadId, request, env, ctx) {
   // Background generation via waitUntil — optimized to share AI + Pexels across templates
   const requestUrl = request.url;
   const rowIdx = lead._row_idx;
+
+  // Convert uploaded files → data URLs up front (outside waitUntil so the
+  // request body is fully consumed before we return 202). Falls back to
+  // JSON-body data URLs for backwards compat with any other callers.
+  let logoDataUrl = "";
+  let imageDataUrls = [];
+  try {
+    if (logoFile) {
+      logoDataUrl = `data:${logoFile.type};base64,${arrayBufferToBase64(logoFile.bytes)}`;
+    } else if (typeof bodyData.logo_data_url === "string" && bodyData.logo_data_url.startsWith("data:")) {
+      logoDataUrl = bodyData.logo_data_url;
+    }
+    if (imageFiles.length > 0) {
+      for (const f of imageFiles) {
+        imageDataUrls.push(`data:${f.type};base64,${arrayBufferToBase64(f.bytes)}`);
+      }
+    } else if (Array.isArray(bodyData.image_data_urls)) {
+      imageDataUrls = bodyData.image_data_urls.filter(u => typeof u === "string" && u.startsWith("data:"));
+    }
+  } catch (e) { console.error("[generate-all] file→dataurl error:", e); }
+  console.log(`[generate-all] lead=${leadId} logo=${logoDataUrl ? "yes" : "no"} images=${imageDataUrls.length}`);
   ctx.waitUntil((async () => {
     // Use form data from body (freshest) with sheet data as fallback
     const description = bodyData.description || lead.form_description || "";
@@ -1980,16 +2360,35 @@ async function handleGenerateAll(leadId, request, env, ctx) {
     const genStatus = { ...initStatus };
     const genUrls = {};
 
-    // Helper: update sheet with current status + url for a single template
-    // Uses the already-obtained accessToken from outer scope (avoids 4 parallel OAuth calls)
-    async function updateTemplateResult(tplKey, url, status) {
+    // Helper: update sheet with current status + url for a single template.
+    // Writes are serialized via a chained promise (mutex) — without this, parallel
+    // updateCells calls trample each other's generation_status JSON value (each
+    // writes the full object, so the last to arrive wins, even if it has stale data).
+    // Legacy draft_url_<n>_<tpl> columns — downstream Python skills read those
+    // by header name (instagram-dm, cold-email, process-order, pipeline_manager).
+    // Keep in sync alongside the worker's own url_<tpl> columns.
+    const DRAFT_COL = {
+      earlydog: "draft_url_1_earlydog",
+      bia: "draft_url_2_bia",
+      liveblocks: "draft_url_3_liveblocks",
+      loveseen: "draft_url_4_loveseen",
+    };
+    let _writeChain = Promise.resolve();
+    function updateTemplateResult(tplKey, url, status) {
       genStatus[tplKey] = status;
       if (url) genUrls[tplKey] = url;
-      try {
-        const updates = { generation_status: JSON.stringify(genStatus) };
-        if (url) updates[`url_${tplKey}`] = url;
-        await updateCells(accessToken, env.LEADS_SHEET_ID, rowIdx, updates);
-      } catch (e) { console.error(`Status update error for ${tplKey}:`, e); }
+      const updates = { generation_status: JSON.stringify(genStatus) };
+      if (url) {
+        updates[`url_${tplKey}`] = url;
+        const legacyCol = DRAFT_COL[tplKey];
+        if (legacyCol) updates[legacyCol] = url;
+      }
+      _writeChain = _writeChain.then(async () => {
+        try {
+          await updateCells(accessToken, env.LEADS_SHEET_ID, rowIdx, updates);
+        } catch (e) { console.error(`Status update error for ${tplKey}:`, e); }
+      });
+      return _writeChain;
     }
 
     // ── PARALLEL STEP 4: Generate + deploy all 4 templates ──
@@ -2010,6 +2409,14 @@ async function handleGenerateAll(leadId, request, env, ctx) {
         const tplSlotMap = IMAGE_SLOT_MAP[tplKey] || {};
         for (const key of Object.keys(tplSlotMap)) {
           if (sharedImages[key]) merged[key] = sharedImages[key];
+        }
+        // Override IMAGE_* slots with user-uploaded images (takes precedence over Pexels).
+        // First N slots in the template's IMAGE_SLOT_MAP get the N user images in order.
+        if (imageDataUrls.length > 0) {
+          const slotKeys = Object.keys(tplSlotMap);
+          imageDataUrls.forEach((dataUrl, i) => {
+            if (i < slotKeys.length) merged[slotKeys[i]] = dataUrl;
+          });
         }
         // Auto-generate META_DESCRIPTION
         if (!merged.META_DESCRIPTION) {
@@ -2037,6 +2444,20 @@ async function handleGenerateAll(leadId, request, env, ctx) {
         html = html.replaceAll('href="./styles.css"', `href="/${templateDir}/styles.css"`);
         html = html.replace(/src="assets\//g, `src="/${templateDir}/assets/`);
 
+        // Inject user-uploaded logo (if provided). Mirrors the logic in
+        // handlePreviewWithImages so the pre-deployed sites match the step-4 editor preview.
+        if (logoDataUrl && logoDataUrl.startsWith("data:")) {
+          const logoImgTag = `<img src="${logoDataUrl}" alt="Logo" style="height:40px;width:auto;object-fit:contain;">`;
+          const footerLogoTag = `<img src="${logoDataUrl}" alt="Logo" style="height:32px;width:auto;object-fit:contain;">`;
+          // Case 1: div.nav-logo wrapping an anchor (bia, earlydog)
+          html = html.replace(/(<div[^>]*class="[^"]*nav-logo[^"]*"[^>]*>)([\s\S]*?)(<\/div>)/i,
+            (_m, open, content, close) => open + content.replace(/(<a[^>]*>)([\s\S]*?)(<\/a>)/i, `$1${logoImgTag}$3`) + close);
+          // Case 2: a.nav-logo directly (loveseen, liveblocks)
+          html = html.replace(/(<a[^>]*class="[^"]*nav-logo[^"]*"[^>]*>)([\s\S]*?)(<\/a>)/i, `$1${logoImgTag}$3`);
+          // Footer / contact logos
+          html = html.replace(/(<(?:a|div|span)[^>]*class="[^"]*(?:contact-logo|footer-logo(?:-text)?)[^"]*"[^>]*>)([\s\S]*?)(<\/(?:a|div|span)>)/i, `$1${footerLogoTag}$3`);
+        }
+
         // Inline CSS
         try {
           const cssUrl = new URL(`/${templateDir}/styles.css`, requestUrl);
@@ -2048,8 +2469,8 @@ async function handleGenerateAll(leadId, request, env, ctx) {
         } catch (e) { console.error("CSS inline failed:", e); }
 
         // Fix asset paths to absolute URLs so they work from deployed domain
-        html = html.replace(/src="\/(templates\/[^"]+)"/g, 'src="https://meinekmu.pages.dev/$1"');
-        html = html.replace(/href="\/(templates\/[^"]+)"/g, 'href="https://meinekmu.pages.dev/$1"');
+        html = html.replace(/src="\/(templates\/[^"]+)"/g, 'src="https://freshnew.ch/$1"');
+        html = html.replace(/href="\/(templates\/[^"]+)"/g, 'href="https://freshnew.ch/$1"');
 
         // Save draft to KV (no CF Pages project needed)
         const draftUrl = await saveDraftToKV(env, leadId, tplKey, html);
@@ -2069,7 +2490,9 @@ async function handleGenerateAll(leadId, request, env, ctx) {
     }
 
     // ── STEP 5: Send welcome email with website previews ──
-    if (email && !lead.welcome_email_sent) {
+    // Internal CLI runs (cold-scraped leads) skip the welcome email — outreach
+    // is handled manually via WhatsApp / cold email / IG DM later in the pipeline.
+    if (email && !lead.welcome_email_sent && !isInternal) {
       try {
         await sendCodeEmail(env, leadId, email, businessName, genUrls);
         // Mark welcome email as sent
@@ -2217,14 +2640,14 @@ Was du KANNST:
 - Neue Abschnitte hinzufügen (IMMER im gleichen Stil wie die bestehende Website!)
 - Schriftarten anpassen
 
-Was du NICHT kannst (antworte mit "type": "chat" und verweise auf info@meine-kmu.ch):
+Was du NICHT kannst (antworte mit "type": "chat" und verweise auf info@freshnew.ch):
 - Kontaktformulare mit Backend-Funktionalität
 - Interaktive JavaScript-Features (Slider, Animationen, Kalender)
 - E-Commerce / Shop-Funktionalität
 - SEO-Optimierung, Google Analytics, Domain-Konfiguration
 - Alles was über HTML/CSS hinausgeht
 
-Bei Anfragen die du nicht umsetzen kannst, antworte freundlich und verweise auf info@meine-kmu.ch für persönliche Unterstützung.`;
+Bei Anfragen die du nicht umsetzen kannst, antworte freundlich und verweise auf info@freshnew.ch für persönliche Unterstützung.`;
 
   try {
     // Build messages array with conversation history
@@ -2543,8 +2966,8 @@ function isAllowedFetchUrl(rawUrl) {
   if (blocked.test(parsed.hostname)) return false;
   // Strict hostname allowlist — reject if hostname merely *contains* the string
   if (/^[a-z0-9-]+\.pages\.dev$/.test(parsed.hostname)) return true;
-  if (parsed.hostname === "meine-kmu.ch" && parsed.pathname.startsWith("/draft/")) return true;
-  if (parsed.hostname === "meinekmu.pages.dev" && parsed.pathname.startsWith("/draft/")) return true;
+  if (parsed.hostname === "freshnew.ch" && parsed.pathname.startsWith("/draft/")) return true;
+  if (parsed.hostname === "freshnew.ch" && parsed.pathname.startsWith("/draft/")) return true;
   return false;
 }
 

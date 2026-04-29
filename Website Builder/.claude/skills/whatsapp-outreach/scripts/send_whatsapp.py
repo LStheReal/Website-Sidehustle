@@ -110,7 +110,7 @@ def generate_whatsapp_message(
 
     if variant == "day0":
         return (
-            f"{greeting}, hier ist {sender_name} von meine-kmu.ch.\n"
+            f"{greeting}, hier ist {sender_name} von freshnew.ch.\n"
             f"\n"
             f"Wir haben 4 kostenlose Website-Entwürfe für {business_name} erstellt:\n"
             f"\n"

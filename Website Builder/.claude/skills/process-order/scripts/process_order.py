@@ -6,7 +6,7 @@ Process a confirmed website order end-to-end:
 2. Verify the pre-built site in .tmp/order_<lead_id>/ (built by server.py at order time)
 3. Deploy to a unique Cloudflare Pages subdomain
 4. Update Google Sheet with the live URL
-5. Send internal notification email to info@meine-kmu.ch
+5. Send internal notification email to info@freshnew.ch
 6. Send confirmation email to the lead
 
 The website is NOT rebuilt here — it is built by server.py's _build_order_site()
@@ -176,14 +176,14 @@ def cloudflare_custom_domain_link(project_name: str) -> str:
 def _send_email(to_email: str, subject: str, body_text: str, body_html: str):
     smtp_host = os.getenv("SMTP_HOST", "mail.infomaniak.com")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER", "info@meine-kmu.ch")
+    smtp_user = os.getenv("SMTP_USER", "info@freshnew.ch")
     smtp_password = os.getenv("SMTP_PASSWORD", "")
     if not smtp_password:
         raise RuntimeError("SMTP_PASSWORD not set in .env")
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = formataddr((str(Header("meine-kmu.ch", "utf-8")), smtp_user))
+    msg["From"] = formataddr((str(Header("freshnew.ch", "utf-8")), smtp_user))
     msg["To"] = to_email
     msg["Reply-To"] = smtp_user
     msg.attach(MIMEText(body_text, "plain", "utf-8"))
@@ -203,10 +203,10 @@ def _send_email(to_email: str, subject: str, body_text: str, body_html: str):
 def _email_header() -> str:
     return """
   <div style="background: #1a1a1a; padding: 18px 24px;">
-    <a href="https://meine-kmu.ch" target="_blank" style="text-decoration: none;">
+    <a href="https://freshnew.ch" target="_blank" style="text-decoration: none;">
       <span style="color: #fff; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;
         font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif;">
-        meine-kmu<span style="color: #a6ff00;">.</span>
+        freshNew<span style="color: #a6ff00;">.</span>
       </span>
     </a>
   </div>"""
@@ -217,9 +217,9 @@ def _email_footer() -> str:
   <div style="background: #f5f5f5; padding: 16px 24px; font-size: 12px; color: #888;
     border-top: 1px solid #e0e0e0;">
     <p style="margin: 0;">
-      meine-kmu.ch &nbsp;·&nbsp;
-      <a href="mailto:info@meine-kmu.ch" style="color: #888;">info@meine-kmu.ch</a> &nbsp;·&nbsp;
-      <a href="https://meine-kmu.ch" style="color: #888;">meine-kmu.ch</a>
+      freshnew.ch &nbsp;·&nbsp;
+      <a href="mailto:info@freshnew.ch" style="color: #888;">info@freshnew.ch</a> &nbsp;·&nbsp;
+      <a href="https://freshnew.ch" style="color: #888;">freshnew.ch</a>
     </p>
   </div>"""
 
@@ -280,8 +280,8 @@ def send_internal_notification(
         f"Domain kaufen:    {purchase_link}\n"
         f"Domain verbinden: {cf_custom_domain_link}\n"
     )
-    _send_email("info@meine-kmu.ch", subject, text, html)
-    print("  Internal notification sent to info@meine-kmu.ch")
+    _send_email("info@freshnew.ch", subject, text, html)
+    print("  Internal notification sent to info@freshnew.ch")
 
 
 def send_customer_confirmation(owner_name, business_name, lead_email, selected_domain):
@@ -321,9 +321,9 @@ def send_customer_confirmation(owner_name, business_name, lead_email, selected_d
       Falls Sie in der Zwischenzeit Fragen haben, antworten Sie einfach auf diese E-Mail.
     </p>
     <p style="margin-bottom: 0;">Freundliche Grüsse<br>
-    <strong>Das meine-kmu.ch Team</strong><br>
-    <a href="mailto:info@meine-kmu.ch" style="color: #555;">info@meine-kmu.ch</a><br>
-    <a href="https://meine-kmu.ch" style="color: #555;">meine-kmu.ch</a></p>
+    <strong>Das freshnew.ch Team</strong><br>
+    <a href="mailto:info@freshnew.ch" style="color: #555;">info@freshnew.ch</a><br>
+    <a href="https://freshnew.ch" style="color: #555;">freshnew.ch</a></p>
   </div>
 {_email_footer()}
 </body>
@@ -335,7 +335,7 @@ def send_customer_confirmation(owner_name, business_name, lead_email, selected_d
         f"Ihre zukünftige Adresse: {domain_display}\n\n"
         f"Ihre Website wird innerhalb von 48 Stunden auf {domain_display} live geschaltet.\n\n"
         f"Bei Fragen antworten Sie einfach auf diese E-Mail.\n\n"
-        f"Freundliche Grüsse\nDas meine-kmu.ch Team\ninfo@meine-kmu.ch\nmeine-kmu.ch"
+        f"Freundliche Grüsse\nDas freshnew.ch Team\ninfo@freshnew.ch\nfreshnew.ch"
     )
     _send_email(lead_email, subject, text, html)
     print(f"  Customer confirmation sent to {lead_email}")
@@ -429,7 +429,7 @@ def main():
 
     if args.dry_run:
         print(f"\n[5/5] DRY RUN — emails would be sent:")
-        print(f"  → info@meine-kmu.ch  (internal notification)")
+        print(f"  → info@freshnew.ch  (internal notification)")
         print(f"  → {lead_email or '(no email)'}  (customer confirmation)")
         print(f"  Live URL:        {live_url}")
         print(f"  Purchase link:   {purchase_link}")

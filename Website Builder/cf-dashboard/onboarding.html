@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>meine-kmu &mdash; Dein Website-Konfigurator</title>
+    <title>freshNew &mdash; Dein Website-Konfigurator</title>
     <meta name="description" content="Konfiguriere deine professionelle Website in wenigen Schritten.">
-    <link rel="stylesheet" href="dashboard.css?v=1776518648">
+    <link rel="stylesheet" href="dashboard.css?v=1777406305">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -19,7 +19,7 @@
 <header class="db-header">
     <div class="db-header-inner">
         <a href="index.html" class="db-logo">
-            <span class="db-logo-name">meine-kmu<span style="color:var(--green);">.</span></span>
+            <span class="db-logo-name">freshNew<span style="color:var(--green);">.</span></span>
         </a>
         <a href="#" onclick="openModal('kontaktModal');return false;" class="db-help-link">Hilfe &amp; Kontakt</a>
         <div class="db-progress">
@@ -304,7 +304,7 @@
     <div class="db-payment-inner">
         <div id="stripe-container"></div>
         <div class="db-payment-footer">
-            <p>Fragen? <a href="mailto:info@meine-kmu.ch">info@meine-kmu.ch</a></p>
+            <p>Fragen? <a href="mailto:info@freshnew.ch">info@freshnew.ch</a></p>
         </div>
     </div>
 </div>
@@ -317,7 +317,7 @@
     <button class="db-btn db-btn-primary" onclick="dbGoHome()">Zur&uuml;ck zur Startseite</button>
     <div class="db-success-contact">
         <p>Fragen? Kontaktiere uns jederzeit:</p>
-        <a href="mailto:info@meine-kmu.ch" class="db-success-email">info@meine-kmu.ch</a>
+        <a href="mailto:info@freshnew.ch" class="db-success-email">info@freshnew.ch</a>
     </div>
 </div>
 
@@ -334,16 +334,16 @@
     <iframe class="db-preview-overlay-iframe" id="previewOverlayIframe" src="about:blank"></iframe>
 </div>
 
-<script src="dashboard.js?v=1776518648"></script>
+<script src="dashboard.js?v=1777406305"></script>
 
 <!-- Modal system (shared with landing page) -->
 <script>
 var _mkModalContent = {
   agbModal: function() {
     return '<h2 style="font-size:1.5rem;font-weight:800;letter-spacing:-0.03em;color:#fff;margin:0 0 .5rem;">Allgemeine Gesch\u00e4ftsbedingungen (AGB)</h2>'
-    +'<p style="font-size:.9rem;color:#888;margin:0 0 1rem;"><strong style="color:#ccc;">meine-kmu.ch \u2014 Stand: 20.3.2026</strong></p>'
+    +'<p style="font-size:.9rem;color:#888;margin:0 0 1rem;"><strong style="color:#ccc;">freshnew.ch \u2014 Stand: 20.3.2026</strong></p>'
     +'<h3 style="font-size:1rem;font-weight:700;color:#fff;margin:1.5rem 0 .5rem;">\u00a7 1 \u00a0Geltungsbereich und Vertragsparteien</h3>'
-    +'<p style="font-size:.88rem;color:#888;line-height:1.65;margin:0 0 .5rem;">Diese AGB regeln das Vertragsverh\u00e4ltnis zwischen meine-kmu.ch (nachfolgend \u00abAnbieter\u00bb), betrieben von Sch\u00fcl\u00e9 Beratung, und dem Kunden, der sich \u00fcber das Onboarding-Formular registriert.</p>'
+    +'<p style="font-size:.88rem;color:#888;line-height:1.65;margin:0 0 .5rem;">Diese AGB regeln das Vertragsverh\u00e4ltnis zwischen freshnew.ch (nachfolgend \u00abAnbieter\u00bb), betrieben von Sch\u00fcl\u00e9 Beratung, und dem Kunden, der sich \u00fcber das Onboarding-Formular registriert.</p>'
     +'<p style="font-size:.88rem;color:#888;line-height:1.65;margin:0 0 .5rem;">Mit dem Abschluss des Onboarding-Prozesses best\u00e4tigt der Kunde, diese AGB gelesen, verstanden und akzeptiert zu haben.</p>'
     +'<h3 style="font-size:1rem;font-weight:700;color:#fff;margin:1.5rem 0 .5rem;">\u00a7 2 \u00a0Leistungsumfang</h3>'
     +'<p style="font-size:.88rem;color:#888;line-height:1.65;margin:0 0 .5rem;">Planung, Gestaltung und Umsetzung einer Website; Kauf der Domain; Hosting der Website; Einrichtung von Inhaltsbereichen; Technische Betreuung und Support; Optionale Zusatzleistungen nach Vereinbarung.</p>'
@@ -355,14 +355,14 @@ var _mkModalContent = {
     +'<p style="font-size:.88rem;color:#888;line-height:1.65;margin:0 0 .5rem;">Nach Bezahlung erh\u00e4lt der Kunde ein einfaches, nicht \u00fcbertragbares Nutzungsrecht. Eigentum an Templates und Code verbleibt beim Anbieter.</p>'
     +'<h3 style="font-size:1rem;font-weight:700;color:#fff;margin:1.5rem 0 .5rem;">\u00a7 6\u201312 \u00a0Weitere Bestimmungen</h3>'
     +'<p style="font-size:.88rem;color:#888;line-height:1.65;margin:0 0 .5rem;">Datenschutz gem\u00e4ss DSG/DSGVO. Haftung nur bei Vorsatz/grober Fahrl\u00e4ssigkeit. M\u00e4ngel innert 10 Tagen r\u00fcgen. K\u00fcndigung jederzeit m\u00f6glich, wirksam per Ende Abrechnungsperiode; keine R\u00fcckerstattung, Website bleibt bis Periodenende online. Schweizerisches Recht, Gerichtsstand Wohnsitz des Anbieters.</p>'
-    +'<p style="margin-top:2rem;color:#666;font-size:.82rem;">Kontakt: meine-kmu.ch | info@meine-kmu.ch</p>';
+    +'<p style="margin-top:2rem;color:#666;font-size:.82rem;">Kontakt: freshnew.ch | info@freshnew.ch</p>';
   },
   kontaktModal: function() {
     return '<div style="text-align:center;">'
     +'<div style="font-size:2rem;margin-bottom:1rem;">\u2709</div>'
     +'<h2 style="font-size:1.5rem;font-weight:800;color:#fff;margin:0 0 1rem;">Kontakt</h2>'
     +'<p style="color:#888;line-height:1.7;margin:0 0 1.5rem;font-size:.95rem;">Hey! Da wir noch Studenten sind, sind wir aktuell nur per E-Mail erreichbar \u2014 aber keine Sorge, wir antworten schnell und sind jederzeit f\u00fcr dich da.</p>'
-    +'<a href="mailto:info@meine-kmu.ch" style="display:inline-block;padding:.7rem 1.5rem;background:var(--green,#a6ff00);color:#0a0a0a;font-weight:700;font-size:.95rem;border-radius:100px;text-decoration:none;">info@meine-kmu.ch</a>'
+    +'<a href="mailto:info@freshnew.ch" style="display:inline-block;padding:.7rem 1.5rem;background:var(--green,#a6ff00);color:#0a0a0a;font-weight:700;font-size:.95rem;border-radius:100px;text-decoration:none;">info@freshnew.ch</a>'
     +'</div>';
   },
   impressumModal: function() {
@@ -370,9 +370,9 @@ var _mkModalContent = {
   },
   faqModal: function() {
     var qs = [
-      ['Was kostet eine Website bei meine-kmu?', 'Unsere Websites kosten CHF 39.- pro Monat oder CHF 390.- pro Jahr (entspricht 2 Monate gratis). Darin enthalten sind Design, Hosting, Wartung und Support \u2014 alles inklusive, keine versteckten Kosten.'],
+      ['Was kostet eine Website bei freshNew?', 'Unsere Websites kosten CHF 39.- pro Monat oder CHF 390.- pro Jahr (entspricht 2 Monate gratis). Darin enthalten sind Design, Hosting, Wartung und Support \u2014 alles inklusive, keine versteckten Kosten.'],
       ['Wie lange dauert es, bis meine Website online ist?', 'Deine Website ist innerhalb von 48 Stunden nach Bestellung live.'],
-      ['Kann ich meine Website sp\u00e4ter anpassen?', 'Ja, du kannst deine Website direkt im Chat-Editor anpassen oder uns eine E-Mail an info@meine-kmu.ch schreiben.'],
+      ['Kann ich meine Website sp\u00e4ter anpassen?', 'Ja, du kannst deine Website direkt im Chat-Editor anpassen oder uns eine E-Mail an info@freshnew.ch schreiben.'],
       ['Brauche ich technische Kenntnisse?', 'Nein, wir k\u00fcmmern uns um alles Technische.'],
       ['Kann ich mein Abo jederzeit k\u00fcndigen?', 'Ja, jederzeit zum Monatsende. Keine Mindestlaufzeit.'],
       ['Bekomme ich eine eigene Domain?', 'Ja, wir helfen dir eine passende .ch oder .com Domain zu finden.']

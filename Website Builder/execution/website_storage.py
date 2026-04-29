@@ -10,7 +10,7 @@ import unicodedata
 from pathlib import Path
 
 
-CLIENT_WEBSITES_DIRNAME = "Meine-Kmu_Client_Websiten"
+CLIENT_WEBSITES_DIRNAME = "freshNew_Client_Websiten"
 
 
 def sanitize_path_component(value: str, fallback: str = "client") -> str:

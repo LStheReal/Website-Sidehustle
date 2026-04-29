@@ -3452,5 +3452,105 @@
     "businesses_checked": 225,
     "no_website_count": 15,
     "yield_rate": 0.067
+  },
+  {
+    "trade": "coiffeur",
+    "city": "bern",
+    "source": "google-maps",
+    "raw_query": "Coiffeur in Bern",
+    "searched_at": "2026-04-26T10:05:39.875080",
+    "businesses_checked": 21,
+    "no_website_count": 1,
+    "yield_rate": 0.048
+  },
+  {
+    "trade": "nagelstudio",
+    "city": "zürich",
+    "source": "google-maps",
+    "raw_query": "Nagelstudio in Zürich",
+    "searched_at": "2026-04-26T10:06:32.333722",
+    "businesses_checked": 21,
+    "no_website_count": 3,
+    "yield_rate": 0.143
+  },
+  {
+    "trade": "reinigung",
+    "city": "winterthur",
+    "source": "google-maps",
+    "raw_query": "Reinigung in Winterthur",
+    "searched_at": "2026-04-26T10:06:54.099205",
+    "businesses_checked": 20,
+    "no_website_count": 2,
+    "yield_rate": 0.1
+  },
+  {
+    "trade": "gärtner",
+    "city": "winterthur",
+    "source": "google-maps",
+    "raw_query": "Gärtner in Winterthur",
+    "searched_at": "2026-04-26T10:09:05.113874",
+    "businesses_checked": 20,
+    "no_website_count": 1,
+    "yield_rate": 0.05
+  },
+  {
+    "trade": "nagelstudio",
+    "city": "bern",
+    "source": "google-maps",
+    "raw_query": "Nagelstudio in Bern",
+    "searched_at": "2026-04-26T10:09:49.519858",
+    "businesses_checked": 30,
+    "no_website_count": 8,
+    "yield_rate": 0.267
+  },
+  {
+    "trade": "maler",
+    "city": "luzern",
+    "source": "google-maps",
+    "raw_query": "Maler in Luzern",
+    "searched_at": "2026-04-26T10:10:43.063448",
+    "businesses_checked": 20,
+    "no_website_count": 2,
+    "yield_rate": 0.1
+  },
+  {
+    "trade": "nagelstudio",
+    "city": "winterthur",
+    "source": "google-maps",
+    "raw_query": "Nagelstudio in Winterthur",
+    "searched_at": "2026-04-26T10:11:37.140398",
+    "businesses_checked": 20,
+    "no_website_count": 3,
+    "yield_rate": 0.15
+  },
+  {
+    "trade": "coiffeur",
+    "city": "zürich",
+    "source": "google-maps",
+    "raw_query": "Coiffeur in Zürich",
+    "searched_at": "2026-04-26T10:12:15.717107",
+    "businesses_checked": 20,
+    "no_website_count": 3,
+    "yield_rate": 0.15
+  },
+  {
+    "trade": "nagelstudio",
+    "city": "luzern",
+    "source": "google-maps",
+    "raw_query": "Nagelstudio in Luzern",
+    "searched_at": "2026-04-26T10:13:44.245609",
+    "businesses_checked": 20,
+    "no_website_count": 2,
+    "yield_rate": 0.1
+  },
+  {
+    "trade": "coiffeur",
+    "city": "winterthur",
+    "source": "google-maps",
+    "raw_query": "Coiffeur in Winterthur",
+    "searched_at": "2026-04-26T10:14:17.610578",
+    "businesses_checked": 20,
+    "no_website_count": 1,
+    "yield_rate": 0.05
   }
 ]

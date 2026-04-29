@@ -84,7 +84,7 @@ COL = {
 }
 
 SENDER_NAME = os.environ.get("SENDER_NAME", "Louise Schuele")
-SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "info@meine-kmu.ch")
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "info@freshnew.ch")
 SENDER_PHONE = os.environ.get("SENDER_PHONE", "")
 
 

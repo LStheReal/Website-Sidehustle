@@ -95,48 +95,48 @@
                     <p class="section-description">{{SERVICES_DESCRIPTION}}</p>
                 </div>
                 <div class="services-grid">
-                    <div class="service-card">
+                    <!-- SC:1 --><div class="service-card">
                         <div class="service-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
                         </div>
                         <h3>{{SERVICE_1_TITLE}}</h3>
                         <p>{{SERVICE_1_DESCRIPTION}}</p>
-                    </div>
-                    <div class="service-card">
+                    </div><!-- /SC:1 -->
+                    <!-- SC:2 --><div class="service-card">
                         <div class="service-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                         </div>
                         <h3>{{SERVICE_2_TITLE}}</h3>
                         <p>{{SERVICE_2_DESCRIPTION}}</p>
-                    </div>
-                    <div class="service-card">
+                    </div><!-- /SC:2 -->
+                    <!-- SC:3 --><div class="service-card">
                         <div class="service-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                         </div>
                         <h3>{{SERVICE_3_TITLE}}</h3>
                         <p>{{SERVICE_3_DESCRIPTION}}</p>
-                    </div>
-                    <div class="service-card">
+                    </div><!-- /SC:3 -->
+                    <!-- SC:4 --><div class="service-card">
                         <div class="service-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
                         </div>
                         <h3>{{SERVICE_4_TITLE}}</h3>
                         <p>{{SERVICE_4_DESCRIPTION}}</p>
-                    </div>
-                    <div class="service-card">
+                    </div><!-- /SC:4 -->
+                    <!-- SC:5 --><div class="service-card">
                         <div class="service-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                         </div>
                         <h3>{{SERVICE_5_TITLE}}</h3>
                         <p>{{SERVICE_5_DESCRIPTION}}</p>
-                    </div>
-                    <div class="service-card">
+                    </div><!-- /SC:5 -->
+                    <!-- SC:6 --><div class="service-card">
                         <div class="service-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                         </div>
                         <h3>{{SERVICE_6_TITLE}}</h3>
                         <p>{{SERVICE_6_DESCRIPTION}}</p>
-                    </div>
+                    </div><!-- /SC:6 -->
                 </div>
             </div>
         </section>
@@ -260,10 +260,9 @@
                         <a href="#about">{{FOOTER_COL_1_LINK_3}}</a>
                     </div>
                     <div class="footer-col">
-                        <h4>{{FOOTER_COL_2_TITLE}}</h4>
-                        <span>{{FOOTER_COL_2_LINK_1}}</span>
-                        <span>{{FOOTER_COL_2_LINK_2}}</span>
-                        <span>{{FOOTER_COL_2_LINK_3}}</span>
+                        <h4>Rechtliches</h4>
+                        <a href="#impressum">Impressum</a>
+                        <a href="#datenschutz">Datenschutz</a>
                     </div>
                     <div class="footer-col">
                         <h4>Kontakt</h4>
@@ -281,6 +280,53 @@
             </div>
         </div>
     </footer>
+
+    <!-- Rechtliche Hinweise (Schweizer Recht: UWG Art. 3 lit. s, revDSG) -->
+    <section class="legal-pages" aria-label="Rechtliche Hinweise">
+        <article id="impressum" class="legal-page">
+            <a href="#top" class="legal-close" aria-label="Schliessen">×</a>
+            <div class="legal-inner">
+                <h2>Impressum</h2>
+                <h3>Angaben gemäss Art. 3 lit. s UWG</h3>
+                <p><strong>{{BUSINESS_NAME}}</strong><br>
+                {{ADDRESS}}<br>
+                Schweiz</p>
+                <p>Telefon: <a href="tel:{{PHONE}}">{{PHONE}}</a><br>
+                E-Mail: <a href="mailto:{{EMAIL}}">{{EMAIL}}</a></p>
+                <p>Inhaltlich Verantwortliche/r: {{BUSINESS_NAME}}</p>
+                <h3>Haftungsausschluss</h3>
+                <p>Der Autor übernimmt keinerlei Gewähr hinsichtlich der inhaltlichen Richtigkeit, Genauigkeit, Aktualität, Zuverlässigkeit und Vollständigkeit der Informationen. Haftungsansprüche gegen den Autor wegen Schäden materieller oder immaterieller Art, welche aus dem Zugriff oder der Nutzung bzw. Nichtnutzung der veröffentlichten Informationen, durch Missbrauch der Verbindung oder durch technische Störungen entstanden sind, werden ausgeschlossen.</p>
+                <h3>Haftung für Links</h3>
+                <p>Verweise und Links auf Webseiten Dritter liegen ausserhalb unseres Verantwortungsbereichs. Es wird jegliche Verantwortung für solche Webseiten abgelehnt. Der Zugriff und die Nutzung solcher Webseiten erfolgen auf eigene Gefahr des Nutzers.</p>
+                <h3>Urheberrechte</h3>
+                <p>Die Urheber- und alle anderen Rechte an Inhalten, Bildern, Fotos oder anderen Dateien auf dieser Website gehören ausschliesslich {{BUSINESS_NAME}} oder den speziell genannten Rechteinhabern. Für die Reproduktion jeglicher Elemente ist die schriftliche Zustimmung der Urheberrechtsträger im Voraus einzuholen.</p>
+            </div>
+        </article>
+        <article id="datenschutz" class="legal-page">
+            <a href="#top" class="legal-close" aria-label="Schliessen">×</a>
+            <div class="legal-inner">
+                <h2>Datenschutzerklärung</h2>
+                <p>Gestützt auf Artikel 13 der schweizerischen Bundesverfassung und die Bestimmungen des revidierten Schweizerischen Datenschutzgesetzes (revDSG) sowie – soweit anwendbar – der EU-Datenschutz-Grundverordnung (DSGVO) hat jede Person Anspruch auf Schutz ihrer Privatsphäre sowie auf Schutz vor Missbrauch ihrer persönlichen Daten. Wir halten uns an diese Bestimmungen.</p>
+                <h3>Verantwortliche Stelle</h3>
+                <p>{{BUSINESS_NAME}}<br>{{ADDRESS}}<br>E-Mail: <a href="mailto:{{EMAIL}}">{{EMAIL}}</a></p>
+                <h3>Bearbeitung von Personendaten</h3>
+                <p>Wir bearbeiten Personendaten, die wir von Ihnen im Rahmen unserer Geschäftsbeziehung oder Ihres Besuchs auf unserer Website erhalten (z. B. Name, Adresse, E-Mail, Telefonnummer, IP-Adresse). Die Bearbeitung erfolgt rechtmässig, nach Treu und Glauben und in verhältnismässiger Weise. Zweck der Bearbeitung ist die Erbringung unserer Leistungen, die Kommunikation mit Kunden und Interessenten sowie die Erfüllung gesetzlicher Pflichten.</p>
+                <h3>Server-Logfiles</h3>
+                <p>Beim Besuch dieser Website werden technisch notwendige Daten (IP-Adresse, Datum, Uhrzeit, abgerufene Seite, verwendeter Browser) in Server-Logfiles gespeichert. Eine Auswertung erfolgt ausschliesslich zu Sicherheits- und statistischen Zwecken.</p>
+                <h3>Cookies</h3>
+                <p>Diese Website kann Cookies einsetzen, um die Nutzung zu erleichtern. Sie können Ihren Browser so einstellen, dass Sie über das Setzen von Cookies informiert werden oder diese ablehnen.</p>
+                <h3>Bekanntgabe an Dritte</h3>
+                <p>Eine Weitergabe Ihrer Daten an Dritte erfolgt nur, soweit dies zur Vertragserfüllung erforderlich ist, Sie eingewilligt haben oder wir gesetzlich dazu verpflichtet sind. Bei Bedarf arbeiten wir mit sorgfältig ausgewählten Auftragsbearbeitern (Hosting, E-Mail, Kommunikation) zusammen.</p>
+                <h3>Datenbekanntgabe ins Ausland</h3>
+                <p>Zur Datenbearbeitung können wir Dienstleister beiziehen, welche Daten im Ausland bearbeiten. Diese sind verpflichtet, den Datenschutz im gleichen Umfang zu wahren wie wir selbst.</p>
+                <h3>Ihre Rechte</h3>
+                <p>Sie haben jederzeit das Recht auf Auskunft, Berichtigung, Löschung oder Einschränkung der Bearbeitung Ihrer Personendaten sowie das Recht auf Datenübertragbarkeit und Widerspruch. Bitte wenden Sie sich dazu an <a href="mailto:{{EMAIL}}">{{EMAIL}}</a>.</p>
+                <h3>Sicherheit</h3>
+                <p>Wir treffen angemessene technische und organisatorische Sicherheitsmassnahmen, um Ihre Daten gegen unberechtigten Zugriff, Verlust oder Missbrauch zu schützen.</p>
+                <p><em>Stand dieser Datenschutzerklärung: {{FOOTER_YEAR}}</em></p>
+            </div>
+        </article>
+    </section>
 
     <script>
         // Mobile menu toggle
@@ -302,14 +348,23 @@
             });
         });
 
-        // Smooth scroll
+        // Smooth scroll (skip legal pages so :target overlay can activate)
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function(e) {
-                e.preventDefault();
                 const target = document.querySelector(this.getAttribute('href'));
-                if (target) {
+                if (target && !target.classList.contains('legal-page')) {
+                    e.preventDefault();
                     target.scrollIntoView({ behavior: 'smooth' });
                 }
+            });
+        });
+
+        // Close legal overlay
+        document.querySelectorAll('.legal-close').forEach(a => {
+            a.addEventListener('click', function(e) {
+                e.preventDefault();
+                history.replaceState(null, '', location.pathname);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             });
         });
 

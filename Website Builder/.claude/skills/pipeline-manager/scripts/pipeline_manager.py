@@ -29,6 +29,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import gspread
+import requests
 from dotenv import load_dotenv
 
 # --- Path setup ---
@@ -56,7 +57,6 @@ from generate_cold_email import (
     generate_day14_email,
     get_screenshot_url,
     send_email,
-    capture_screenshot_bytes,
 )
 
 # Call assistant
@@ -328,99 +328,121 @@ def get_template_order(category: str) -> list[str]:
 
 # --- Pipeline processing per status ---
 
+def _trigger_kv_generate(lead_id: str, timeout_sec: int = 120) -> dict:
+    """
+    Trigger draft generation on the freshnew worker (KV-backed).
+
+    POSTs to /api/lead/<id>/generate-all with CRON_SECRET to bypass user-facing
+    rate limits. The worker handles AI enrichment, Pexels images, HTML
+    generation, KV save, and sheet updates (url_<tpl> + draft_url_<n>_<tpl> +
+    status flip to website_created). We just poll generation-status until
+    complete or timeout.
+
+    Returns: {"urls": {tplKey: url}, "errors": [tplKey...], "timed_out": bool}
+    """
+    secret = os.getenv("CRON_SECRET", "")
+    base = os.getenv("DASHBOARD_BASE_URL", "https://freshnew.ch")
+    if not secret:
+        raise RuntimeError("CRON_SECRET not set in .env — required to call worker generate-all.")
+
+    headers = {"Authorization": f"Bearer {secret}", "Content-Type": "application/json"}
+    r = requests.post(
+        f"{base}/api/lead/{lead_id}/generate-all",
+        headers=headers, json={}, timeout=15,
+    )
+    if r.status_code not in (200, 202):
+        raise RuntimeError(f"generate-all returned {r.status_code}: {r.text[:200]}")
+
+    deadline = time.time() + timeout_sec
+    last = {}
+    while time.time() < deadline:
+        time.sleep(3)
+        try:
+            sr = requests.get(f"{base}/api/lead/{lead_id}/generation-status", timeout=10)
+            if sr.status_code == 200:
+                last = sr.json() or {}
+                statuses = last.get("status", {}) or {}
+                if statuses and all(s in ("done", "error") for s in statuses.values()):
+                    break
+        except Exception as e:
+            print(f"    poll error (will retry): {e}")
+
+    statuses = last.get("status", {}) or {}
+    urls = last.get("urls", {}) or {}
+    errors = [k for k, v in statuses.items() if v == "error"]
+    timed_out = (not statuses) or any(s == "pending" for s in statuses.values())
+    return {"urls": urls, "errors": errors, "timed_out": timed_out}
+
+
 def process_new(lead: dict, worksheet, sender_info: dict) -> list[dict]:
     """
-    Process a 'new' lead: build 3 website drafts, deploy, generate outreach.
+    Process a 'new' lead: trigger 4-template draft generation on the freshnew
+    worker (KV-routed, no per-lead Cloudflare Pages project). The worker
+    handles AI, image lookup, HTML build, KV save, and sheet updates.
+
     Returns list of action items for the human.
     """
     actions = []
     biz = lead["business_name"]
     lead_id = lead["lead_id"]
     row_idx = lead["_row_idx"]
-    category = lead.get("category", "")
-    city = lead.get("city", "")
 
     print(f"\n{'='*60}")
     print(f"  Processing NEW: {biz}")
     print(f"{'='*60}")
+    print(f"  Triggering KV draft generation on worker...")
 
-    # Step 1: Build 3 website drafts
-    website_data = lead_to_website_data(lead)
-    template_order = get_template_order(category)
-    draft_urls = {}
+    try:
+        result = _trigger_kv_generate(lead_id)
+    except Exception as e:
+        print(f"  ERROR: {e}")
+        actions.append({
+            "type": "ERROR",
+            "priority": "HIGH",
+            "business": biz,
+            "message": f"Worker generate-all failed for {biz}: {e}",
+        })
+        return actions
 
-    for t_idx, template_name in enumerate(template_order):
-        # Delay between deployments to avoid Cloudflare rate limits
-        if t_idx > 0:
-            time.sleep(15)
+    urls = result["urls"]
+    errors = result["errors"]
+    timed_out = result["timed_out"]
 
-        print(f"\n  Building {template_name} template...")
-        output_dir = str(PROJECT_ROOT / ".tmp" / f"draft_{lead_id}_{template_name}")
+    if urls:
+        for tpl, url in urls.items():
+            print(f"    {tpl}: {url}")
+    if errors:
+        print(f"  Errors on: {', '.join(errors)}")
+    if timed_out:
+        print(f"  Polling timed out — generation may still finish in background; check sheet later.")
 
-        try:
-            build_fn = BUILD_FUNCTIONS[template_name]
-            result = build_fn(website_data, output_dir, overwrite=True)
-            print(f"    Built: {result['output_dir']}")
+    # The worker already wrote url_<tpl>, draft_url_<n>_<tpl>, generation_status,
+    # and (if any drafts succeeded) status="website_created". Only set
+    # next_action here — that's not in the worker's scope.
+    owner_email = (lead.get("owner_email") or "").strip()
+    next_action = "READY TO SEND EMAIL" if owner_email else "READY TO CALL"
+    try:
+        update_cells(worksheet, row_idx, {"next_action": next_action})
+    except Exception as e:
+        print(f"  WARN: next_action update failed: {e}")
 
-            # Step 2: Deploy to Cloudflare Pages
-            project_name = sanitize_project_name(f"{biz}-{template_name}")
-            print(f"    Deploying as '{project_name}'...")
-
-            if not check_wrangler_auth():
-                print("    WARNING: Wrangler not authenticated. Run 'npx wrangler login' first.")
-                actions.append({
-                    "type": "SETUP",
-                    "priority": "HIGH",
-                    "business": biz,
-                    "message": "Wrangler not authenticated. Run 'npx wrangler login' before processing.",
-                })
-                break
-
-            create_project(project_name)
-            live_url = deploy_site(Path(output_dir), project_name)
-
-            if live_url:
-                draft_urls[template_name] = live_url
-                print(f"    Deployed: {live_url}")
-            else:
-                print(f"    WARNING: Deploy failed for {template_name}")
-
-        except Exception as e:
-            print(f"    ERROR building {template_name}: {e}")
-
-    # Step 3: Update sheet with draft URLs
-    sheet_updates = {"status": "website_created"}
-
-    url_cols = ["draft_url_1", "draft_url_2", "draft_url_3", "draft_url_4"]
-    for i, template_name in enumerate(template_order):
-        if template_name in draft_urls and i < 4:
-            sheet_updates[url_cols[i]] = draft_urls[template_name]
-
-    # Step 4: Update next actions
-    owner_email = lead.get("owner_email", "").strip()
-    owner_name = lead.get("owner_name", "").strip()
-
-    if owner_email:
-        sheet_updates["next_action"] = f"READY TO SEND EMAIL"
+    if urls:
         actions.append({
             "type": "READY_FOR_OUTREACH",
             "priority": "LOW",
             "business": biz,
-            "message": f"Website built for {biz}. Run action send-emails to send cold email.",
+            "message": (
+                f"Website built for {biz} ({len(urls)}/4 templates). "
+                f"{'Run action send-emails to send cold email.' if owner_email else 'No email — ready for call/WhatsApp.'}"
+            ),
         })
     else:
-        phone = lead.get("phone", "")
-        sheet_updates["next_action"] = f"READY TO CALL"
         actions.append({
-            "type": "READY_FOR_OUTREACH",
-            "priority": "LOW",
+            "type": "ERROR",
+            "priority": "HIGH",
             "business": biz,
-            "message": f"Website built for {biz}. No email found, ready for call.",
+            "message": f"No drafts generated for {biz} (errors: {errors or 'timeout'}).",
         })
-
-    # Write all updates to sheet
-    update_cells(worksheet, row_idx, sheet_updates)
-    print(f"  Sheet updated: status → website_created")
 
     return actions
 
@@ -1432,20 +1454,8 @@ def action_send_emails(worksheet, sender_info: dict, sheet_title: str, count: in
                 sender_email=sender_info["email"],
             )
 
-            # Capture screenshots for inline images
+            # Send via SMTP (screenshots are embedded as thum.io HTTPS URLs in the HTML)
             print(f"  [{sent+1}/{len(send_list)}] {biz} -> {owner_email}")
-            screenshot_urls = [url1, url2, url3, url4]
-            cids = ["ss1", "ss2", "ss3", "ss4"]
-            inline_images = []
-            for url, cid in zip(screenshot_urls, cids):
-                if url:
-                    try:
-                        png_bytes = capture_screenshot_bytes(url)
-                        inline_images.append((png_bytes, cid))
-                    except Exception as e:
-                        print(f"    Warning: Screenshot failed for {url}: {e}")
-
-            # Send via SMTP
             send_email(
                 to_email=owner_email,
                 subject=email["subject"],
@@ -1453,7 +1463,6 @@ def action_send_emails(worksheet, sender_info: dict, sheet_title: str, count: in
                 body_html=email["body_html"],
                 from_name=sender_info["name"],
                 from_email=sender_info["email"],
-                inline_images=inline_images,
             )
 
             # Update sheet

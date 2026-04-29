@@ -65,10 +65,10 @@ and add the following:
 | `LEADS_SHEET_ID` | `1ewwwPeuwHXvpOGUZfsS2agZRGZBkXJ-MBy4Bs68v-50` |
 | `SMTP_HOST` | `mail.infomaniak.com` |
 | `SMTP_PORT` | `587` |
-| `SMTP_USER` | `info@meine-kmu.ch` |
+| `SMTP_USER` | `info@freshnew.ch` |
 | `SMTP_PASSWORD` | (from `.env`) |
 | `SENDER_NAME` | e.g. `Louise Schuele` |
-| `SENDER_EMAIL` | `info@meine-kmu.ch` |
+| `SENDER_EMAIL` | `info@freshnew.ch` |
 | `SENDER_PHONE` | e.g. `+41 79 xxx xx xx` |
 
 ### First run (recommended)
@@ -101,7 +101,7 @@ cat token.json
 ```
 
 (This is the same token that Cloudflare uses — after rotating, update it in
-Wrangler too: `cat token.json | npx wrangler pages secret put GOOGLE_TOKEN_JSON --project-name meinekmu`.)
+Wrangler too: `cat token.json | npx wrangler pages secret put GOOGLE_TOKEN_JSON --project-name freshnew`.)
 
 ## Troubleshooting
 

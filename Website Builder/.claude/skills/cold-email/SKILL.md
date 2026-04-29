@@ -1,7 +1,7 @@
 # Skill: cold-email
 
 ## Description
-Generate a personalized German cold email for a business without a website. Day 0 email is HTML with a 2x2 clickable screenshot grid of 4 live website drafts + a claim code box linking to meine-kmu.ch. Also generates Day 7 follow-up and Day 14 breakup email variants.
+Generate a personalized German cold email for a business without a website. Day 0 email is HTML with a 2x2 clickable screenshot grid of 4 live website drafts + a claim code box linking to freshnew.ch. Also generates Day 7 follow-up and Day 14 breakup email variants.
 
 ## When to Use
 - After building and deploying 4 draft websites for a lead
@@ -24,7 +24,7 @@ python3 .claude/skills/cold-email/scripts/generate_cold_email.py \
   --website-url-4 "https://swisstextilreinigung-loveseen.pages.dev" \
   --sender-name "Louise Schülé & Mael Dubach" \
   --sender-phone "+41 76 605 90 22" \
-  --sender-email "info@meine-kmu.ch" \
+  --sender-email "info@freshnew.ch" \
   --owner-email "hans@swisstextilreinigung.ch" \
   --send
 ```
@@ -34,7 +34,7 @@ python3 .claude/skills/cold-email/scripts/generate_cold_email.py \
 - `--category` (required) — Business type in German (e.g., "Maler", "Reinigung")
 - `--city` (required) — City
 - `--owner-name` (optional) — Owner/contact name for personal greeting
-- `--lead-id` (required) — Lead ID used as claim code on meine-kmu.ch
+- `--lead-id` (required) — Lead ID used as claim code on freshnew.ch
 - `--website-url-1` (required) — Live URL for template 1 (Klassisch/BiA)
 - `--website-url-2` (required) — Live URL for template 2 (Modern/Liveblocks)
 - `--website-url-3` (required) — Live URL for template 3 (Frisch/Earlydog)
@@ -53,7 +53,7 @@ Add to your `.env`:
 ```
 SMTP_HOST=smtp.hostinger.com   # or mail.infomaniak.com
 SMTP_PORT=465                  # 465 = SSL, 587 = STARTTLS
-SMTP_USER=info@meine-kmu.ch
+SMTP_USER=info@freshnew.ch
 SMTP_PASSWORD=your_password
 ```
 
@@ -75,4 +75,4 @@ Each email includes: `subject`, `body` (plain text), `body_html` (HTML, Day 0 on
 - ONE clear CTA per email
 - Day 0 is HTML; Day 7+14 are plain text
 - Screenshots auto-generated via `https://image.thum.io/get/width/280/{url}` if not provided
-- Claim code links to `https://meine-kmu.ch/claim?code={lead_id}`
+- Claim code links to `https://freshnew.ch/claim?code={lead_id}`

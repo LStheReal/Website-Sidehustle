@@ -222,7 +222,7 @@ cat > "$DIST/_headers" << 'EOF'
 
 /onboarding.html
   Cache-Control: no-cache, no-store, must-revalidate
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://js.stripe.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src 'self' blob: data: https://*.pages.dev https://meine-kmu.ch; img-src 'self' data: blob: https: http:; connect-src 'self' https://api.stripe.com https://js.stripe.com; object-src 'none'; base-uri 'self';
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://js.stripe.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src 'self' blob: data: https://*.pages.dev https://freshnew.ch; img-src 'self' data: blob: https: http:; connect-src 'self' https://api.stripe.com https://js.stripe.com; object-src 'none'; base-uri 'self';
   X-Frame-Options: SAMEORIGIN
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
@@ -243,4 +243,4 @@ EOF
 
 echo ""
 echo "Build complete! Files in $DIST/"
-echo "Deploy with: npx wrangler pages deploy $DIST --project-name meinekmu"
+echo "Deploy with: npx wrangler pages deploy $DIST --project-name freshnew"

@@ -440,6 +440,7 @@
 
             // Re-scale iframes when step 3 becomes visible
             if (n === 3) setTimeout(scaleIframes, 50);
+            if (n === 4 && window.innerWidth <= 768) setTimeout(function() { setDevice('mobile'); }, 50);
         }, 280);
     }
 
@@ -661,6 +662,9 @@
                 state.tempImageUrls = [];
                 renderImageList();
             }
+            // Images changed — step 4 must regenerate to inject them into the preview.
+            state.formDirtyForStep4 = true;
+            clearEditorCache();
         }
     };
 
@@ -682,6 +686,9 @@
         state.imageFiles.splice(idx, 1);
         state.tempImageUrls = [];
         renderImageList();
+        // Images changed — step 4 must regenerate to reflect the removal.
+        state.formDirtyForStep4 = true;
+        clearEditorCache();
     };
 
     function collectFormData() {
@@ -709,6 +716,87 @@
         return el ? el.value.trim() : '';
     }
 
+    // Decode any image File (JPEG, PNG, WebP, GIF, AVIF, HEIC on Safari, SVG, BMP)
+    // via the browser's native image decoder, then re-encode to a small JPEG/PNG
+    // data URL via canvas. Normalizing format up front means:
+    //   - Server doesn't need to handle exotic formats (HEIC, TIFF, etc.)
+    //   - Final HTML always embeds a browser-renderable image
+    //   - Payload size is bounded (canvas resize max 1400px longest edge)
+    function fileToNormalizedDataUrl(file, maxEdge, preferPng) {
+        maxEdge = maxEdge || 1400;
+        return new Promise(function (resolve) {
+            if (!file) { resolve(''); return; }
+            var done = false;
+            var url = '';
+            try { url = URL.createObjectURL(file); } catch (e) {}
+            function finish(result) {
+                if (done) return;
+                done = true;
+                if (url) try { URL.revokeObjectURL(url); } catch (e) {}
+                resolve(result || '');
+            }
+            // 8s safety timeout — if image decode hangs, return empty (caller falls
+            // back to no-image generation rather than blocking the user forever).
+            setTimeout(function () { finish(''); }, 8000);
+
+            var img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = function () {
+                try {
+                    var w = img.naturalWidth || img.width;
+                    var h = img.naturalHeight || img.height;
+                    if (!w || !h) { finish(''); return; }
+                    var scale = Math.min(1, maxEdge / Math.max(w, h));
+                    var tw = Math.max(1, Math.round(w * scale));
+                    var th = Math.max(1, Math.round(h * scale));
+                    var canvas = document.createElement('canvas');
+                    canvas.width = tw; canvas.height = th;
+                    var ctx = canvas.getContext('2d');
+                    if (!ctx) { finish(''); return; }
+                    // Fill white for transparency-flattened JPEG (logos go to PNG to keep transparency)
+                    if (!preferPng) {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, tw, th);
+                    }
+                    ctx.drawImage(img, 0, 0, tw, th);
+                    var mime = preferPng ? 'image/png' : 'image/jpeg';
+                    var quality = preferPng ? undefined : 0.85;
+                    var out = canvas.toDataURL(mime, quality);
+                    if (!out || out === 'data:,') { finish(''); return; }
+                    finish(out);
+                } catch (err) {
+                    console.warn('Canvas conversion failed for', file && file.name, err);
+                    finish('');
+                }
+            };
+            img.onerror = function () {
+                console.warn('Image decode failed for', file && file.name, 'type=', file && file.type);
+                finish('');
+            };
+            img.src = url;
+        });
+    }
+
+    // Convert state.logoFile + state.imageFiles to data URLs in parallel.
+    // Caches the result so we don't re-encode on every step transition.
+    async function getNormalizedImagePayload() {
+        // Reuse cached payload if files haven't changed
+        var sig = (state.logoFile ? state.logoFile.name + ':' + state.logoFile.size + ':' + state.logoFile.lastModified : '') + '|' +
+            (state.imageFiles || []).map(function (f) { return f.name + ':' + f.size + ':' + f.lastModified; }).join(';');
+        if (state._imgPayloadSig === sig && state._imgPayload) return state._imgPayload;
+
+        var logoP = state.logoFile ? fileToNormalizedDataUrl(state.logoFile, 600, true) : Promise.resolve('');
+        var imgPs = (state.imageFiles || []).map(function (f) { return fileToNormalizedDataUrl(f, 1400, false); });
+        var results = await Promise.all([logoP].concat(imgPs));
+        var payload = {
+            logo_data_url: results[0] || '',
+            image_data_urls: results.slice(1).filter(function (x) { return !!x; }),
+        };
+        state._imgPayloadSig = sig;
+        state._imgPayload = payload;
+        return payload;
+    }
+
     async function onStep2Next() {
         collectFormData();
         var fd = state.formData;
@@ -731,8 +819,20 @@
             console.warn('Form save failed:', e);
         });
 
-        // Trigger background generation — pass form data directly (belt & suspenders)
-        apiPost('/lead/' + state.leadId + '/generate-all', fd).catch(function (e) {
+        // Convert uploaded files to normalized data URLs (handles all formats —
+        // HEIC, WebP, GIF, etc. — by drawing to canvas → JPEG/PNG). JSON body is
+        // used so the worker doesn't have to parse multipart at all.
+        var imgPayload = { logo_data_url: '', image_data_urls: [] };
+        try { imgPayload = await getNormalizedImagePayload(); } catch (e) { console.warn('Image normalize failed:', e); }
+
+        var payload = Object.assign({}, fd, imgPayload);
+
+        // Trigger background generation
+        fetch('/api/lead/' + state.leadId + '/generate-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }).catch(function (e) {
             console.warn('Generate-all trigger failed:', e);
         });
 
@@ -750,12 +850,18 @@
     /* ---------- Step 3: Choose Style ---------- */
     function initTemplateStep() {
         var cards = document.querySelectorAll('.db-tpl-card');
+        // Cache-buster: KV draft content can change after a chat-edit, but the
+        // draft URL stays the same — so reassigning the same string to iframe.src
+        // wouldn't trigger a reload. A fresh ?_=… param forces a fetch every
+        // time the user re-enters step 3, keeping thumbnails in sync with the
+        // confirmation email.
+        var bust = '?_=' + Date.now();
         cards.forEach(function (card) {
             var iframe = card.querySelector('.db-preview-iframe');
             if (!iframe) return;
             var tpl = card.dataset.tpl;
             if (state.generatedUrls[tpl]) {
-                iframe.src = state.generatedUrls[tpl];
+                iframe.src = state.generatedUrls[tpl] + bust;
                 var badge = card.querySelector('.db-tpl-personalized-badge');
                 if (badge) badge.style.display = '';
             } else {
@@ -794,15 +900,27 @@
 
             for (var tpl in data.status) {
                 if (data.status[tpl] === 'done' && urls[tpl]) {
+                    var wasNew = !state.generatedUrls[tpl];
                     state.generatedUrls[tpl] = urls[tpl];
                     var card = document.querySelector('.db-tpl-card[data-tpl="' + tpl + '"]');
                     if (card) {
                         var iframe = card.querySelector('.db-preview-iframe');
                         if (iframe && !iframe.src.includes(urls[tpl])) {
-                            iframe.src = urls[tpl];
+                            iframe.src = urls[tpl] + '?_=' + Date.now();
                         }
                         var badge = card.querySelector('.db-tpl-personalized-badge');
                         if (badge) badge.style.display = '';
+                    }
+
+                    // Sync editor to the freshly-deployed KV version when /generate-all
+                    // completes for the user's chosen template. Without this, the editor
+                    // could keep showing an earlier /preview-with-images render while the
+                    // confirmation email links to the (different) /generate-all output.
+                    if (wasNew && state.currentStep === 4 && state.template === tpl) {
+                        var hasEdits = (state.chatHistory || []).some(function(m) { return m.role === 'user'; });
+                        if (!hasEdits) {
+                            loadEditorWithHtml(urls[tpl] + '?_=' + Date.now(), null);
+                        }
                     }
                 }
             }
@@ -989,44 +1107,104 @@
         return html + script;
     }
 
-    // POST preview with images, text, and logo — always sends all form data
+    // POST preview with images, text, and logo — always sends all form data.
+    // CRITICAL: When the user has uploaded images, NEVER fall back to a no-image
+    // GET endpoint — that silently strips their uploads from the build (recurring bug).
+    // Instead, retry the POST with backoff, then surface a real error.
     async function loadPreviewWithImages() {
         var editorIframe = document.getElementById('editorIframe');
         var myInitId = _editorInitId; // guard against stale callbacks
-        try {
-            var fd = new FormData();
-            fd.append('lead_id', state.leadId);
-            fd.append('template', state.template);
-            fd.append('description', state.customizations.description || '');
-            fd.append('services', state.customizations.services || '');
-            fd.append('strengths', state.customizations.strengths || '');
-            if (state.customizations.phone) fd.append('phone', state.customizations.phone);
-            if (state.customizations.address) fd.append('address', state.customizations.address);
-            var _previewEmail = (state.leadData && (state.leadData.owner_email || state.leadData.emails)) || '';
-            if (_previewEmail) fd.append('email', _previewEmail);
-            if (state.logoFile) fd.append('logo', state.logoFile);
-            state.imageFiles.forEach(function (f) { fd.append('images', f); });
+        var hasUserImages = (state.imageFiles && state.imageFiles.length > 0) || !!state.logoFile;
 
-            var resp = await fetch('/api/preview-with-images', { method: 'POST', body: fd });
+        // Pre-normalize images once (canvas → bounded JPEG/PNG data URL).
+        // Handles HEIC, WebP, AVIF, GIF, etc. by going through browser's image decoder.
+        var imgPayload = { logo_data_url: '', image_data_urls: [] };
+        if (hasUserImages) {
+            try { imgPayload = await getNormalizedImagePayload(); }
+            catch (e) { console.warn('Image normalize failed in preview:', e); }
             if (myInitId !== _editorInitId) return;
-            if (resp.ok) {
-                var html = await resp.text();
-                if (myInitId !== _editorInitId) return;
-                if (html && html.length > 100) {
-                    state.currentEditHtml = html;
-                    cacheEditorState();   // save to sessionStorage (images included)
-                    saveHtmlDraft();      // background-save to Drive for cross-session
-                    editorIframe.srcdoc = injectPreviewLinkGuard(html);
-                    showEditorAfterLoad();
-                    return;
-                }
-            }
-        } catch (e) {
-            if (myInitId !== _editorInitId) return;
-            console.warn('Preview with images failed:', e);
         }
-        if (myInitId !== _editorInitId) return;
-        // Fallback to GET preview with query params
+
+        function buildBody() {
+            var body = {
+                lead_id: state.leadId,
+                template: state.template,
+                description: state.customizations.description || '',
+                services: state.customizations.services || '',
+                strengths: state.customizations.strengths || '',
+            };
+            if (state.customizations.phone) body.phone = state.customizations.phone;
+            if (state.customizations.address) body.address = state.customizations.address;
+            var _previewEmail = (state.leadData && (state.leadData.owner_email || state.leadData.emails)) || '';
+            if (_previewEmail) body.email = _previewEmail;
+            if (imgPayload.logo_data_url) body.logo_data_url = imgPayload.logo_data_url;
+            if (imgPayload.image_data_urls.length) body.image_data_urls = imgPayload.image_data_urls;
+            return body;
+        }
+
+        // Up to 3 attempts when user images are present (rate-limit / blip recovery)
+        var maxAttempts = hasUserImages ? 3 : 1;
+        var lastErr = null;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                var resp = await fetch('/api/preview-with-images', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(buildBody()),
+                });
+                if (myInitId !== _editorInitId) return;
+                if (resp.ok) {
+                    var html = await resp.text();
+                    if (myInitId !== _editorInitId) return;
+                    if (html && html.length > 100) {
+                        state.currentEditHtml = html;
+                        cacheEditorState();   // save to sessionStorage (images included)
+                        saveHtmlDraft();      // background-save to Drive for cross-session
+                        editorIframe.srcdoc = injectPreviewLinkGuard(html);
+                        showEditorAfterLoad();
+                        return;
+                    }
+                    lastErr = new Error('Empty HTML response');
+                } else {
+                    lastErr = new Error('HTTP ' + resp.status);
+                    // 429 = rate limit; 5xx = transient — both worth retrying
+                    if (resp.status !== 429 && resp.status < 500) break;
+                }
+            } catch (e) {
+                if (myInitId !== _editorInitId) return;
+                lastErr = e;
+                console.warn('Preview with images attempt ' + attempt + ' failed:', e);
+            }
+            if (attempt < maxAttempts) {
+                await new Promise(function(r) { setTimeout(r, 1500 * attempt); });
+                if (myInitId !== _editorInitId) return;
+            }
+        }
+
+        // If user uploaded images, do NOT silently fall back to a no-image preview.
+        // Show an error so they retry — better than shipping a website without their images.
+        if (hasUserImages) {
+            console.error('Preview with user images failed after retries:', lastErr);
+            stopEditorProgress();
+            var editorLoading = document.getElementById('editorLoading');
+            if (editorLoading) {
+                editorLoading.innerHTML = '<div style="padding:24px;text-align:center;max-width:480px;margin:0 auto;">'
+                    + '<div style="font-size:18px;font-weight:600;margin-bottom:8px;color:#c00;">Vorschau konnte nicht erstellt werden</div>'
+                    + '<div style="font-size:14px;color:#555;margin-bottom:16px;">Deine Bilder konnten nicht verarbeitet werden. Bitte versuche es nochmals.</div>'
+                    + '<button id="retryPreviewBtn" style="padding:10px 20px;background:#000;color:#fff;border:0;border-radius:6px;cursor:pointer;font-size:14px;">Erneut versuchen</button>'
+                    + '</div>';
+                var btn = document.getElementById('retryPreviewBtn');
+                if (btn) btn.onclick = function() {
+                    editorLoading.innerHTML = '';
+                    editorLoading.style.display = '';
+                    startEditorProgress();
+                    loadPreviewWithImages();
+                };
+            }
+            return;
+        }
+
+        // No user images at risk → safe to use GET preview as fallback
         var params = new URLSearchParams({
             description: state.customizations.description || '',
             services: state.customizations.services || '',
@@ -1062,19 +1240,28 @@
         startEditorProgress();
 
         try {
-            // Step 1: Fetch fresh HTML with updated info/images
-            var fd = new FormData();
-            fd.append('lead_id', state.leadId);
-            fd.append('template', state.template);
-            fd.append('description', state.customizations.description || '');
-            fd.append('services', state.customizations.services || '');
-            fd.append('strengths', state.customizations.strengths || '');
-            if (state.customizations.phone) fd.append('phone', state.customizations.phone);
-            if (state.customizations.address) fd.append('address', state.customizations.address);
-            if (state.logoFile) fd.append('logo', state.logoFile);
-            state.imageFiles.forEach(function(f) { fd.append('images', f); });
+            // Step 1: Fetch fresh HTML with updated info/images (JSON path —
+            // canvas-normalized data URLs handle all formats reliably).
+            var imgPayload2 = { logo_data_url: '', image_data_urls: [] };
+            try { imgPayload2 = await getNormalizedImagePayload(); } catch (e) {}
+            if (myInitId !== _editorInitId) return;
+            var bodyObj = {
+                lead_id: state.leadId,
+                template: state.template,
+                description: state.customizations.description || '',
+                services: state.customizations.services || '',
+                strengths: state.customizations.strengths || '',
+            };
+            if (state.customizations.phone) bodyObj.phone = state.customizations.phone;
+            if (state.customizations.address) bodyObj.address = state.customizations.address;
+            if (imgPayload2.logo_data_url) bodyObj.logo_data_url = imgPayload2.logo_data_url;
+            if (imgPayload2.image_data_urls.length) bodyObj.image_data_urls = imgPayload2.image_data_urls;
 
-            var resp = await fetch('/api/preview-with-images', { method: 'POST', body: fd });
+            var resp = await fetch('/api/preview-with-images', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(bodyObj),
+            });
             if (myInitId !== _editorInitId) return;
             if (!resp.ok) throw new Error('Generation failed');
             var newHtml = await resp.text();
@@ -1175,9 +1362,17 @@
         }
 
         // ── 1. Check sessionStorage / in-memory first (survives reload, has images) ──
-        var cachedHtml = getCachedHtml();
+        // If the user has fresh image/logo files in state, the cache may predate them —
+        // skip it and regenerate so uploads always land in the preview.
+        var _cacheHasFreshImages = (state.imageFiles && state.imageFiles.length > 0) || !!state.logoFile;
+        var cachedHtml = _cacheHasFreshImages ? null : getCachedHtml();
         var cachedChat = getCachedChat();
-        if (cachedHtml) {
+        // Only honor the local cache if the user has actually edited via chat.
+        // Otherwise it may hold a /preview-with-images render that diverges from
+        // the deployed KV draft — the URL the confirmation email links to.
+        // Falling through loads from KV instead so dashboard ↔ email stay in sync.
+        var _hasUserEdits = (cachedChat || []).some(function(m) { return m.role === 'user'; });
+        if (cachedHtml && _hasUserEdits) {
             state.currentEditHtml = cachedHtml;
             state.chatHistory = cachedChat || [];
             if (!state.chatHistory.length) {
@@ -1210,7 +1405,10 @@
         startEditorProgress();
 
         // ── 2. Check Drive for saved HTML (survives tab close) ──
-        var driveId = state.leadData && state.leadData['html_' + state.template + '_drive_id'];
+        // Skip Drive cache if the user has fresh images in this session — those wouldn't
+        // be in the saved HTML and we'd silently lose them.
+        var _hasFreshImages = (state.imageFiles && state.imageFiles.length > 0) || !!state.logoFile;
+        var driveId = !_hasFreshImages && state.leadData && state.leadData['html_' + state.template + '_drive_id'];
         if (driveId) {
             apiGet('/lead/' + state.leadId + '/saved-html/' + state.template).then(function(r) {
                 if (myInitId !== _editorInitId) return; // template changed, discard
@@ -1233,8 +1431,12 @@
         }
 
         // ── 3. No cache anywhere — generate fresh ──
+        // CRITICAL: If the user uploaded images in step 2, the pre-deployed URL was
+        // generated BEFORE we had those images — using it would silently drop them.
+        // Always regenerate via loadPreviewWithImages when user images are present.
+        var hasUserImages = (state.imageFiles && state.imageFiles.length > 0) || !!state.logoFile;
         var deployedUrl = state.generatedUrls[state.template];
-        if (deployedUrl) {
+        if (deployedUrl && !hasUserImages) {
             loadEditorWithHtml(deployedUrl, null);
         } else {
             loadPreviewWithImages();
@@ -1880,6 +2082,22 @@
         if (_orderEmail) formData.append('email', _orderEmail);
         if (state.logoFile) formData.append('logo', state.logoFile);
         state.imageFiles.forEach(function (f) { formData.append('images', f); });
+
+        // CRITICAL: Send the exact HTML the user sees in the editor (logo + images
+        // already embedded as base64 data URLs, plus any chat edits). The worker
+        // deploys this verbatim — no regeneration, no cache lookup, no slot remap.
+        // This is the only way to guarantee "what you see is what gets shipped."
+        // Note: currentEditHtml is cleared when the user navigates past step 4 (to
+        // free memory), so fall back to the in-memory / sessionStorage cache here.
+        var finalHtmlForOrder = state.currentEditHtml;
+        if (!finalHtmlForOrder || finalHtmlForOrder.length < 100) {
+            try { finalHtmlForOrder = getCachedHtml(); } catch (e) { finalHtmlForOrder = null; }
+        }
+        if (finalHtmlForOrder && finalHtmlForOrder.length > 100) {
+            formData.append('final_html', finalHtmlForOrder);
+        } else {
+            console.warn('Order: no final_html available — worker will regenerate (images may be lost)');
+        }
 
         apiPostOrder(state.leadId, formData).then(function (result) {
             if (result && result.live_url) window._liveUrl = result.live_url;

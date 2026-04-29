@@ -50,7 +50,7 @@ python3 .claude/skills/pipeline-manager/scripts/pipeline_manager.py \
   --sheet-url "https://docs.google.com/spreadsheets/d/..." \
   --sender-name "Luise Schule" \
   --sender-phone "+41 79 123 45 67" \
-  --sender-email "info@meine-kmu.ch" \
+  --sender-email "info@freshnew.ch" \
   --action send-emails \
   --count 100
 ```

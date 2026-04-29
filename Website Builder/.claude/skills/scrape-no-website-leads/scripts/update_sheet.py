@@ -374,8 +374,15 @@ def append_leads_to_sheet(worksheet, leads: list[dict], existing_ids: set) -> in
         row = [str(lead.get(col, "")) for col in LEAD_COLUMNS]
         rows.append(row)
 
-    # Batch append
-    worksheet.append_rows(rows, value_input_option="RAW")
+    # Batch append — anchor to column A's last row to avoid placement drift
+    # on sheets with a large column footprint (Sheets API values.append uses
+    # the last populated row across ALL columns, which can land far from visible data).
+    next_row = len(worksheet.col_values(1)) + 1
+    end_col = _col_letter(len(LEAD_COLUMNS))
+    worksheet.update(
+        values=rows,
+        range_name=f"A{next_row}:{end_col}{next_row + len(rows) - 1}",
+    )
 
     new_ids = [lead.get("lead_id") for lead in new_leads]
     print(f"Added {len(new_leads)} new leads to sheet")

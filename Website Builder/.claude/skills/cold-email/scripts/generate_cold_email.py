@@ -30,10 +30,11 @@ from execution.retry_utils import retry_with_backoff
 
 
 def get_screenshot_url(website_url: str, custom_url: str | None = None) -> str:
-    """Return a screenshot image URL. Auto-generates via thum.io if no custom URL given."""
+    """Return a screenshot image URL. Auto-generates via microlink.io if no custom URL given."""
     if custom_url and custom_url.strip():
         return custom_url
-    return f"https://image.thum.io/get/width/280/{website_url}"
+    from urllib.parse import quote
+    return f"https://api.microlink.io/?url={quote(website_url, safe='')}&screenshot=true&meta=false&embed=screenshot.url"
 
 
 def capture_screenshot_bytes(url: str) -> bytes:
@@ -69,7 +70,7 @@ def generate_day0_email(
 ) -> dict:
     """Generate the Day 0 cold intro email (HTML with 2x2 image grid + claim code)."""
     greeting = generate_greeting(owner_name)
-    claim_url = f"https://meine-kmu.ch/dashboard"
+    claim_url = f"https://freshnew.ch/dashboard"
 
     subject = "Grüezi, wir haben 4 Webseiten für Sie gebaut"
 
@@ -86,8 +87,8 @@ def generate_day0_email(
 
   <!-- Header -->
   <div style="background: #1a1a1a; padding: 18px 24px;">
-    <a href="https://meine-kmu.ch" target="_blank" style="text-decoration: none;">
-      <span style="color: #fff; font-size: 22px; font-weight: 800; letter-spacing: -0.5px; font-family: 'ClashDisplay', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif;">meine-kmu<span style="color: #a6ff00;">.</span></span>
+    <a href="https://freshnew.ch" target="_blank" style="text-decoration: none;">
+      <span style="color: #fff; font-size: 22px; font-weight: 800; letter-spacing: -0.5px; font-family: 'ClashDisplay', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif;">freshNew<span style="color: #a6ff00;">.</span></span>
     </a>
   </div>
 
@@ -107,13 +108,13 @@ def generate_day0_email(
       <tr>
         <td width="50%" style="padding: 5px;">
           <a href="{url1}" target="_blank" style="display: block; text-decoration: none; color: #444;">
-            <img src="cid:ss1" width="100%" style="border: 1px solid #ddd; border-radius: 5px; display: block;" alt="Klassisch">
+            <img src="{ss1}" width="100%" style="border: 1px solid #ddd; border-radius: 5px; display: block;" alt="Klassisch">
             <div style="text-align: center; font-size: 12px; margin-top: 6px; font-weight: 600;">Klassisch →</div>
           </a>
         </td>
         <td width="50%" style="padding: 5px;">
           <a href="{url2}" target="_blank" style="display: block; text-decoration: none; color: #444;">
-            <img src="cid:ss2" width="100%" style="border: 1px solid #ddd; border-radius: 5px; display: block;" alt="Modern">
+            <img src="{ss2}" width="100%" style="border: 1px solid #ddd; border-radius: 5px; display: block;" alt="Modern">
             <div style="text-align: center; font-size: 12px; margin-top: 6px; font-weight: 600;">Modern →</div>
           </a>
         </td>
@@ -121,13 +122,13 @@ def generate_day0_email(
       <tr>
         <td width="50%" style="padding: 5px;">
           <a href="{url3}" target="_blank" style="display: block; text-decoration: none; color: #444;">
-            <img src="cid:ss3" width="100%" style="border: 1px solid #ddd; border-radius: 5px; display: block;" alt="Frisch">
+            <img src="{ss3}" width="100%" style="border: 1px solid #ddd; border-radius: 5px; display: block;" alt="Frisch">
             <div style="text-align: center; font-size: 12px; margin-top: 6px; font-weight: 600;">Frisch →</div>
           </a>
         </td>
         <td width="50%" style="padding: 5px;">
           <a href="{url4}" target="_blank" style="display: block; text-decoration: none; color: #444;">
-            <img src="cid:ss4" width="100%" style="border: 1px solid #ddd; border-radius: 5px; display: block;" alt="Elegant">
+            <img src="{ss4}" width="100%" style="border: 1px solid #ddd; border-radius: 5px; display: block;" alt="Elegant">
             <div style="text-align: center; font-size: 12px; margin-top: 6px; font-weight: 600;">Elegant →</div>
           </a>
         </td>
@@ -136,7 +137,7 @@ def generate_day0_email(
 
     <p>Jedes Design ist vollständig nach Ihren Wünschen anpassbar: Farben, Texte, Bilder und Logo. Kein Technik-Wissen nötig.</p>
 
-    <p>Gefällt Ihnen eine davon? Erhalten Sie Zugriff auf <strong>meine-kmu.ch</strong> mit Ihrem persönlichen Code:</p>
+    <p>Gefällt Ihnen eine davon? Erhalten Sie Zugriff auf <strong>freshnew.ch</strong> mit Ihrem persönlichen Code:</p>
 
     <!-- Claim code box -->
     <div style="background: #f5f5f5; border: 1px solid #e0e0e0; border-radius: 8px; padding: 22px; margin: 20px 0; text-align: center;">
@@ -151,7 +152,7 @@ def generate_day0_email(
     <strong>{sender_name}</strong><br>
     <span style="color: #555;">{sender_email}</span><br>
     <span style="color: #555;">{sender_phone}</span><br>
-    <a href="https://meine-kmu.ch" style="color: #555;">meine-kmu.ch</a></p>
+    <a href="https://freshnew.ch" style="color: #555;">freshnew.ch</a></p>
 
   </div>
 
@@ -172,7 +173,7 @@ Modern:    {url2}
 Frisch:    {url3}
 Elegant:   {url4}
 
-Gefällt Ihnen eine davon? Erhalten Sie Zugriff auf meine-kmu.ch mit Ihrem persönlichen Code:
+Gefällt Ihnen eine davon? Erhalten Sie Zugriff auf freshnew.ch mit Ihrem persönlichen Code:
 
   Code: {lead_id}
   Link: {claim_url}
@@ -185,7 +186,7 @@ Freundliche Grüsse
 {sender_name}
 {sender_email}
 {sender_phone}
-meine-kmu.ch"""
+freshnew.ch"""
 
     return {
         "variant": "day_0_cold_intro",
@@ -193,7 +194,7 @@ meine-kmu.ch"""
         "subject": subject,
         "body": body_text,
         "body_html": body_html,
-        "description": "Cold intro — 4 website screenshots in 2x2 grid + claim code for meine-kmu.ch",
+        "description": "Cold intro — 4 website screenshots in 2x2 grid + claim code for freshnew.ch",
     }
 
 
@@ -209,7 +210,7 @@ def generate_day7_email(
 ) -> dict:
     """Generate the Day 7 follow-up email."""
     greeting = generate_greeting(owner_name)
-    claim_url = f"https://meine-kmu.ch/dashboard"
+    claim_url = f"https://freshnew.ch/dashboard"
 
     subject = f"Noch kurz nachfragen — {business_name}"
 
@@ -222,7 +223,7 @@ Modern:    {url2}
 Frisch:    {url3}
 Elegant:   {url4}
 
-Andere {category}-Betriebe in der Region sind bereits online. Erhalten Sie Zugriff auf Ihre Webseite auf meine-kmu.ch mit Ihrem Code:
+Andere {category}-Betriebe in der Region sind bereits online. Erhalten Sie Zugriff auf Ihre Webseite auf freshnew.ch mit Ihrem Code:
 
   Code: {lead_id}
   {claim_url}
@@ -251,7 +252,7 @@ def generate_day14_email(
 ) -> dict:
     """Generate the Day 14 breakup email."""
     greeting = generate_greeting(owner_name)
-    claim_url = f"https://meine-kmu.ch/dashboard"
+    claim_url = f"https://freshnew.ch/dashboard"
 
     subject = f"Letzte Nachricht — {business_name}"
 
@@ -259,7 +260,7 @@ def generate_day14_email(
 
 Die 4 Webseiten-Entwürfe für Ihren Betrieb sind noch online — wir werden sie aber bald einem anderen Betrieb in der Region anbieten.
 
-Falls Sie doch Interesse haben, erhalten Sie jetzt noch schnell Zugriff auf meine-kmu.ch:
+Falls Sie doch Interesse haben, erhalten Sie jetzt noch schnell Zugriff auf freshnew.ch:
 
   Code: {lead_id}
   {claim_url}
@@ -419,7 +420,7 @@ def main():
     parser.add_argument("--screenshot-url-2", default="", help="Screenshot image URL for template 2 (auto-generated if omitted)")
     parser.add_argument("--screenshot-url-3", default="", help="Screenshot image URL for template 3 (auto-generated if omitted)")
     parser.add_argument("--screenshot-url-4", default="", help="Screenshot image URL for template 4 (auto-generated if omitted)")
-    parser.add_argument("--lead-id", required=True, help="Lead ID used as claim code on meine-kmu.ch")
+    parser.add_argument("--lead-id", required=True, help="Lead ID used as claim code on freshnew.ch")
     parser.add_argument("--sender-name", required=True)
     parser.add_argument("--sender-phone", required=True)
     parser.add_argument("--sender-email", required=True)
@@ -466,7 +467,7 @@ def main():
             "city": args.city,
             "category": args.category,
             "lead_id": args.lead_id,
-            "claim_url": f"https://meine-kmu.ch/claim?code={args.lead_id}",
+            "claim_url": f"https://freshnew.ch/claim?code={args.lead_id}",
         },
         "sender": {
             "name": args.sender_name,
@@ -498,19 +499,6 @@ def main():
             print("\n  Error: --owner-email is required to send the email.")
         else:
             day0 = emails[0]
-            print(f"\nCapturing screenshots ...")
-            screenshot_urls = [
-                args.website_url_1,
-                args.website_url_2,
-                args.website_url_3,
-                args.website_url_4,
-            ]
-            cids = ["ss1", "ss2", "ss3", "ss4"]
-            inline_images = []
-            for url, cid in zip(screenshot_urls, cids):
-                print(f"  Screenshotting {url} ...")
-                png_bytes = capture_screenshot_bytes(url)
-                inline_images.append((png_bytes, cid))
             print(f"\nSending Day 0 email to {args.owner_email} ...")
             send_email(
                 to_email=args.owner_email,
@@ -519,7 +507,6 @@ def main():
                 body_html=day0["body_html"],
                 from_name=args.sender_name,
                 from_email=args.sender_email,
-                inline_images=inline_images,
             )
 
     if args.sheet_url and args.lead_id:

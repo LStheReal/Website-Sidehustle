@@ -83,9 +83,10 @@ COL = {
     "whatsapp_status": 44,
 }
 
-SENDER_NAME = os.environ.get("SENDER_NAME", "Louise Schuele")
+SENDER_NAME = os.environ.get("SENDER_NAME", "Louise Schülé & Mael Dubach")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "info@freshnew.ch")
 SENDER_PHONE = os.environ.get("SENDER_PHONE", "")
+FROM_NAME = os.environ.get("FROM_NAME", "freshNew")
 
 
 # --- SMTP / Sheets with retry wrappers -------------------------------------
@@ -349,7 +350,7 @@ def _send_and_update(
                 subject=email["subject"],
                 body_text=email["body"],
                 body_html=text_to_html(email["body"]),
-                from_name=SENDER_NAME,
+                from_name=FROM_NAME,
                 from_email=SENDER_EMAIL,
                 inline_images=None,
             )

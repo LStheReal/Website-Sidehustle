@@ -1,11 +1,14 @@
-name: Auto Emailer
+name: Send Cold Emails (Day 0)
 
-# Runs the follow-up auto-emailer daily at 07:00 UTC (08:00 Zurich winter, 09:00 Zurich summer).
-# Can also be triggered manually from the GitHub UI → Actions → "Auto Emailer" → "Run workflow".
+# Runs every Tuesday at 07:00 UTC = 08:00 Zurich (winter) / 09:00 Zurich (summer).
+# Finds all leads with status "website_created" + email + draft URLs and sends
+# the Day 0 cold intro email. No new leads are built — only already-ready ones.
+#
+# Can also be triggered manually from GitHub UI → Actions → "Send Cold Emails" → Run workflow.
 
 on:
   schedule:
-    - cron: '0 7 * * *'
+    - cron: '0 7 * * 2'   # every Tuesday at 07:00 UTC
   workflow_dispatch:
     inputs:
       dry_run:
@@ -13,14 +16,14 @@ on:
         type: boolean
         default: false
       lead_id:
-        description: 'Process only this lead_id (optional)'
+        description: 'Process only this lead_id (optional, for testing)'
         type: string
         default: ''
 
 jobs:
-  send-followups:
+  send-cold-emails:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: 'Website Builder'
@@ -44,7 +47,7 @@ jobs:
       - name: Write service account credentials
         run: echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > /tmp/service_account.json
 
-      - name: Run auto_emailer
+      - name: Run send_first_emails
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/service_account.json
           LEADS_SHEET_ID: ${{ secrets.LEADS_SHEET_ID }}
@@ -64,13 +67,13 @@ jobs:
           if [ -n "${{ github.event.inputs.lead_id }}" ]; then
             ARGS="$ARGS --lead-id ${{ github.event.inputs.lead_id }}"
           fi
-          python execution/auto_emailer.py $ARGS
+          python execution/send_first_emails.py $ARGS
 
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: auto-emailer-logs-${{ github.run_id }}
+          name: send-cold-emails-logs-${{ github.run_id }}
           path: 'Website Builder/logs/'
           if-no-files-found: ignore
           retention-days: 30

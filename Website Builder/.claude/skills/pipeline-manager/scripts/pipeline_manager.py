@@ -1461,7 +1461,7 @@ def action_send_emails(worksheet, sender_info: dict, sheet_title: str, count: in
                 subject=email["subject"],
                 body_text=email["body"],
                 body_html=email["body_html"],
-                from_name=sender_info["name"],
+                from_name=os.getenv("FROM_NAME", "freshNew"),
                 from_email=sender_info["email"],
             )
 
